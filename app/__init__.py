@@ -1,0 +1,1 @@
+"""Enhanced calculator application package."""

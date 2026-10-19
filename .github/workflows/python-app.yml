@@ -1,0 +1,26 @@
+name: Python Tests
+
+# Run the coverage gate for both branch updates and proposed changes.
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install project and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . -r requirements.txt
+
+      - name: Run tests with coverage
+        run: |
+          python -m pytest --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=100
