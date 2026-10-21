@@ -17,6 +17,14 @@ from app.calculator_config import (
         ("divide", ("divide", "div", "/"), "/"),
         ("power", ("power", "pow", "^"), "^"),
         ("root", ("root", "nthroot", "√"), "√"),
+        ("modulus", ("modulus", "mod", "%"), "%"),
+        ("integer_division", ("integer_division", "intdiv", "//"), "//"),
+        ("percentage", ("percentage", "percent", "pct"), "pct"),
+        (
+            "absolute_difference",
+            ("absolute_difference", "absdiff", "abs"),
+            "abs",
+        ),
     ],
 )
 def test_operation_config_defines_canonical_aliases_and_symbols(
