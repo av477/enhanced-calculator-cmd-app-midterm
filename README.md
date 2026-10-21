@@ -31,7 +31,7 @@ project's Python packages separate from other installations.
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e . -r requirements.txt
+python -m pip install -e ".[dev]"
 ```
 
 If script activation is blocked, enable it for the current PowerShell process
@@ -47,10 +47,10 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e . -r requirements.txt
+python -m pip install -e ".[dev]"
 ```
 
-The editable install and requirements file include the runtime packages and
+The editable install includes runtime packages and the development extra adds
 the test tools (`pytest` and `pytest-cov`).
 
 ## Run the calculator
@@ -201,7 +201,6 @@ tests/
 .env
 .env.example
 pyproject.toml
-requirements.txt
 README.md
 .github/
     workflows/
