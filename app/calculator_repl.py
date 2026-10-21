@@ -28,6 +28,10 @@ OPERATION_COLORS = {
     "divide": Fore.RED,
     "power": Fore.GREEN,
     "root": Fore.BLUE,
+    "modulus": Fore.CYAN,
+    "integer_division": Fore.YELLOW,
+    "percentage": Fore.MAGENTA,
+    "absolute_difference": Fore.RED,
 }
 
 

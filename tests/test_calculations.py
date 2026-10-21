@@ -23,6 +23,10 @@ from app.calculation import (
         (36, "divide", 6, 6, "/"),
         (-16, "divide", 4, -4, "/"),
         (10.5, "divide", 2.5, 4.2, "/"),
+        (17, "modulus", 5, 2, "%"),
+        (-17, "integer_division", 5, -3, "//"),
+        (12, "percentage", 30, 40, "pct"),
+        (4, "absolute_difference", 10, 6, "abs"),
     ],
 )
 def test_calculation_executes_operations(
@@ -59,6 +63,18 @@ def test_calculation_executes_operations(
         ("ROOT", "root", "√"),
         ("nthroot", "root", "√"),
         ("√", "root", "√"),
+        ("MODULUS", "modulus", "%"),
+        ("mod", "modulus", "%"),
+        ("%", "modulus", "%"),
+        ("INTEGER_DIVISION", "integer_division", "//"),
+        ("intdiv", "integer_division", "//"),
+        ("//", "integer_division", "//"),
+        ("PERCENTAGE", "percentage", "pct"),
+        ("percent", "percentage", "pct"),
+        ("pct", "percentage", "pct"),
+        ("ABSOLUTE_DIFFERENCE", "absolute_difference", "abs"),
+        ("absdiff", "absolute_difference", "abs"),
+        ("abs", "absolute_difference", "abs"),
     ],
 )
 def test_calculation_factory_normalizes_aliases(
@@ -72,7 +88,7 @@ def test_calculation_factory_normalizes_aliases(
     assert calculation.symbol == expected_symbol
 
 
-@pytest.mark.parametrize("operation", ["", "mod", "sqrt"])
+@pytest.mark.parametrize("operation", ["", "foo", "sqrt"])
 def test_calculation_factory_rejects_invalid_operations(operation):
     with pytest.raises(ValueError, match="Invalid operation"):
         CalculationFactory.create_calculation(8, operation, 2)
@@ -87,6 +103,10 @@ def test_calculation_factory_rejects_invalid_operations(operation):
         (48, "div", 6, 8),
         (2, "^", 4, 16),
         (27, "root", 3, 3),
+        (17, "%", 5, 2),
+        (-17, "//", 5, -3),
+        (12, "percent", 30, 40),
+        (10, "absdiff", 4, 6),
     ],
 )
 def test_calculate_dispatches_aliases(

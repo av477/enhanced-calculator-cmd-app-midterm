@@ -8,8 +8,12 @@ from app.calculator_observers import AutoSaveHistoryObserver, LoggingObserver
 from app.history import CalculationHistory
 from app.operations import (
     AdditionStrategy,
+    AbsoluteDifferenceStrategy,
     DivisionStrategy,
+    IntegerDivisionStrategy,
+    ModulusStrategy,
     OperationFactory,
+    PercentageStrategy,
     PowerStrategy,
     RootStrategy,
 )
@@ -158,6 +162,10 @@ def test_autosave_observer_writes_calculations_and_tracks_undo_redo(tmp_path):
         ("/", DivisionStrategy),
         ("pow", PowerStrategy),
         ("√", RootStrategy),
+        ("%", ModulusStrategy),
+        ("//", IntegerDivisionStrategy),
+        ("pct", PercentageStrategy),
+        ("abs", AbsoluteDifferenceStrategy),
     ],
 )
 def test_operation_factory_creates_strategies_from_names_aliases_and_symbols(
@@ -168,4 +176,4 @@ def test_operation_factory_creates_strategies_from_names_aliases_and_symbols(
 
 def test_operation_factory_rejects_unsupported_operations():
     with pytest.raises(ValueError, match="Invalid operation"):
-        OperationFactory.create("mod")
+        OperationFactory.create("sqrt")

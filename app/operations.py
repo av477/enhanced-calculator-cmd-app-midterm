@@ -1,6 +1,7 @@
 """Primitive arithmetic operations used by the calculator."""
 
 from dataclasses import dataclass
+import math
 from typing import Protocol
 
 from app.calculator_config import VALID_OPERATIONS
@@ -91,6 +92,55 @@ class RootStrategy:
         return first_number ** (1 / degree)
 
 
+@dataclass(frozen=True)
+class ModulusStrategy:
+    """Return the remainder after dividing the first operand by the second."""
+
+    def execute(self, first_number: float, second_number: float) -> float:
+        """Return the remainder of the operands."""
+        if second_number == 0:
+            raise DivisionByZeroError("Cannot calculate a remainder with zero.")
+        return first_number % second_number
+
+
+@dataclass(frozen=True)
+class IntegerDivisionStrategy:
+    """Divide two operands and discard the fractional part of the quotient."""
+
+    def execute(self, first_number: float, second_number: float) -> float:
+        """Return the quotient truncated toward zero."""
+        if second_number == 0:
+            raise DivisionByZeroError("Cannot divide by zero.")
+        quotient = first_number / second_number
+        if not math.isfinite(quotient):
+            raise ValueError(
+                "Integer division result is outside the supported numeric range."
+            )
+        return float(int(quotient))
+
+
+@dataclass(frozen=True)
+class PercentageStrategy:
+    """Calculate the first operand as a percentage of the second."""
+
+    def execute(self, first_number: float, second_number: float) -> float:
+        """Return the first operand divided by the second, as a percentage."""
+        if second_number == 0:
+            raise DivisionByZeroError(
+                "Cannot calculate a percentage with a zero base."
+            )
+        return (first_number / second_number) * 100
+
+
+@dataclass(frozen=True)
+class AbsoluteDifferenceStrategy:
+    """Return the absolute difference between two operands."""
+
+    def execute(self, first_number: float, second_number: float) -> float:
+        """Return the non-negative difference between the operands."""
+        return abs(first_number - second_number)
+
+
 class OperationFactory:
     """Create the concrete strategy associated with an operation or alias."""
 
@@ -101,6 +151,10 @@ class OperationFactory:
         "divide": DivisionStrategy,
         "power": PowerStrategy,
         "root": RootStrategy,
+        "modulus": ModulusStrategy,
+        "integer_division": IntegerDivisionStrategy,
+        "percentage": PercentageStrategy,
+        "absolute_difference": AbsoluteDifferenceStrategy,
     }
 
     @classmethod
@@ -141,3 +195,23 @@ def power(first_number: float, second_number: float) -> float:
 def root(first_number: float, second_number: float) -> float:
     """Return the second-number-degree root of the first number."""
     return RootStrategy().execute(first_number, second_number)
+
+
+def modulus(first_number: float, second_number: float) -> float:
+    """Return the remainder of dividing the first number by the second."""
+    return ModulusStrategy().execute(first_number, second_number)
+
+
+def integer_division(first_number: float, second_number: float) -> float:
+    """Return the quotient with its fractional part discarded."""
+    return IntegerDivisionStrategy().execute(first_number, second_number)
+
+
+def percentage(first_number: float, second_number: float) -> float:
+    """Return the first number as a percentage of the second."""
+    return PercentageStrategy().execute(first_number, second_number)
+
+
+def absolute_difference(first_number: float, second_number: float) -> float:
+    """Return the absolute difference between two numbers."""
+    return AbsoluteDifferenceStrategy().execute(first_number, second_number)

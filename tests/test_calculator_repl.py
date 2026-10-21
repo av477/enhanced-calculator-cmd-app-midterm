@@ -114,7 +114,7 @@ def test_run_interactive_can_disable_csv_autosaving(monkeypatch, capsys, tmp_pat
     assert not history_path.exists()
 
 
-@pytest.mark.parametrize("invalid_operation", ["sqrt", "mod", ""])
+@pytest.mark.parametrize("invalid_operation", ["sqrt", "foobar", ""])
 def test_run_interactive_invalid_operation_shows_available_choices(
     monkeypatch, capsys, invalid_operation
 ):
@@ -160,6 +160,28 @@ def test_run_interactive_power_and_root_show_results_and_history(monkeypatch, ca
     assert "Result: 3.0" in output
     assert "1. 2.0 ^ 3.0 = 8" in output
     assert "2. 3.0√(27.0) = 3.0" in output
+
+
+@pytest.mark.parametrize(
+    ("operation", "first_number", "second_number", "expected"),
+    [
+        ("mod", "17", "5", "Result: 2.0"),
+        ("intdiv", "-17", "5", "Result: -3.0"),
+        ("percent", "12", "30", "Result: 40.0"),
+        ("absdiff", "4", "10", "Result: 6.0"),
+    ],
+)
+def test_run_interactive_supports_additional_operations(
+    monkeypatch, capsys, operation, first_number, second_number, expected
+):
+    responses = iter([operation, first_number, second_number, "exit"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(responses))
+
+    from app.calculator_repl import run_interactive
+
+    run_interactive()
+
+    assert expected in capsys.readouterr().out
 
 
 def test_run_interactive_invalid_root_does_not_add_history(monkeypatch, capsys):

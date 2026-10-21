@@ -1,13 +1,14 @@
 # Enhanced Calculator
 
 A Python command-line calculator with a continuous read-evaluate-print loop
-(REPL), six arithmetic operations, undo/redo, and pandas-backed CSV history.
+(REPL), ten arithmetic operations, undo/redo, and pandas-backed CSV history.
 The implementation is split into focused modules and demonstrates Strategy,
 Factory, Observer, Memento, and Facade patterns.
 
 ## Features
 
-- Addition, subtraction, multiplication, division, power, and nth root
+- Addition, subtraction, multiplication, division, power, nth root, modulus,
+  integer division, percentage, and absolute difference
 - Named operations, aliases, and symbols
 - Persistent CSV history with startup loading and optional automatic saving
 - `help`, `history`, `clear`, `undo`, `redo`, `save`, `load`, and exit commands
@@ -88,10 +89,16 @@ degree. Zero-degree roots and non-real results are rejected.
 | Division | `divide`, `div`, `/` | first / second |
 | Power | `power`, `pow`, `^` | first raised to second |
 | Nth root | `root`, `nthroot`, `√` | root of first with degree second |
+| Modulus | `modulus`, `mod`, `%` | remainder of first divided by second |
+| Integer division | `integer_division`, `intdiv`, `//` | quotient truncated toward zero |
+| Percentage | `percentage`, `percent`, `pct` | `(first / second) * 100` |
+| Absolute difference | `absolute_difference`, `absdiff`, `abs` | `abs(first - second)` |
 
 Inputs must be finite numbers. Division by zero, invalid operations, malformed
 numbers, and results outside the supported real-number domain are reported as
-errors; failed calculations are not added to history.
+errors; failed calculations are not added to history. Modulus, integer
+division, and percentage reject a zero second operand. Integer division
+truncates toward zero (for example, dividing `-17` by `5` returns `-3`).
 
 ## REPL commands
 
