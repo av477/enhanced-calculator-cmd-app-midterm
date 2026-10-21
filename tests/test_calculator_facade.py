@@ -53,6 +53,33 @@ def test_undo_redo_restore_history_and_new_calculation_discards_redo():
     assert [item.operation for item in calculator.history] == ["add", "subtract"]
 
 
+def test_multiple_undo_redo_steps_restore_each_history_snapshot():
+    calculator = Calculator()
+    calculator.calculate(2, "+", 3)
+    calculator.calculate(4, "*", 5)
+    calculator.calculate(9, "-", 1)
+
+    assert calculator.undo() is True
+    assert [item.operation for item in calculator.history] == ["add", "multiply"]
+    assert calculator.undo() is True
+    assert [item.operation for item in calculator.history] == ["add"]
+    assert calculator.undo() is True
+    assert calculator.history == ()
+    assert calculator.undo() is False
+
+    assert calculator.redo() is True
+    assert [item.operation for item in calculator.history] == ["add"]
+    assert calculator.redo() is True
+    assert [item.operation for item in calculator.history] == ["add", "multiply"]
+    assert calculator.redo() is True
+    assert [item.operation for item in calculator.history] == [
+        "add",
+        "multiply",
+        "subtract",
+    ]
+    assert calculator.redo() is False
+
+
 def test_clear_history_can_be_undone_and_redone():
     calculator = Calculator()
     calculator.calculate(2, "+", 3)
