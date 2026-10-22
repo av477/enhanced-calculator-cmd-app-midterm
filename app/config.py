@@ -19,6 +19,7 @@ class AppConfig:
     history_csv_path: Path
     autosave_history: bool
     log_level: str
+    log_file_path: Path = Path("calculator.log")
 
     @classmethod
     def from_environment(
@@ -73,8 +74,17 @@ class AppConfig:
                 "CALCULATOR_LOG_LEVEL must be CRITICAL, ERROR, WARNING, INFO, or DEBUG."
             )
 
+        raw_log_file_path = settings.get(
+            "CALCULATOR_LOG_FILE", "calculator.log"
+        ).strip()
+        if not raw_log_file_path:
+            raise ConfigurationError(
+                "CALCULATOR_LOG_FILE must be a non-empty path."
+            )
+
         return cls(
             history_csv_path=history_path,
             autosave_history=boolean_values[raw_autosave],
             log_level=log_level,
+            log_file_path=Path(raw_log_file_path).expanduser(),
         )

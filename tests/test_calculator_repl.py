@@ -1,5 +1,6 @@
 import importlib
 import io
+import logging
 import runpy
 import sys
 
@@ -15,11 +16,22 @@ def isolate_history_file(monkeypatch, tmp_path):
         "CALCULATOR_HISTORY_FILE",
         "CALCULATOR_AUTOSAVE_HISTORY",
         "CALCULATOR_LOG_LEVEL",
+        "CALCULATOR_LOG_FILE",
     ):
         monkeypatch.delenv(name, raising=False)
+    yield
+    from app import logger as app_logger
+
+    if app_logger._file_handler is not None:
+        logger = logging.getLogger("app.calculator_observers")
+        logger.removeHandler(app_logger._file_handler)
+        app_logger._file_handler.close()
+        app_logger._file_handler = None
 
 
-def test_run_interactive_handles_valid_and_invalid_operations(monkeypatch, capsys):
+def test_run_interactive_handles_valid_and_invalid_operations(
+    monkeypatch, capsys, tmp_path
+):
     responses = iter(["add", "5", "3", "divide", "10", "0", "quit"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(responses))
 
@@ -31,6 +43,12 @@ def test_run_interactive_handles_valid_and_invalid_operations(monkeypatch, capsy
     assert "Enhanced Calculator" in captured.out
     assert "Result: 8.0" in captured.out or "Result: 8" in captured.out
     assert "Cannot divide by zero" in captured.out
+    assert "add" in (tmp_path / "calculator_history.csv").read_text(
+        encoding="utf-8"
+    )
+    log_contents = (tmp_path / "calculator.log").read_text(encoding="utf-8")
+    assert "add: 5.0 + 3.0 = 8.0" in log_contents
+    assert "divide" not in log_contents
 
 
 def test_run_interactive_help_history_and_exit(monkeypatch, capsys):
@@ -84,6 +102,23 @@ def test_run_interactive_handles_configuration_errors(capsys, monkeypatch):
     run_interactive()
 
     assert "Configuration error: bad configuration" in capsys.readouterr().out
+
+
+def test_run_interactive_reports_logging_file_errors(tmp_path, capsys):
+    from app.calculator import Calculator
+    from app.calculator_repl import run_interactive
+    from app.config import AppConfig
+
+    config = AppConfig(
+        tmp_path / "history.csv",
+        False,
+        "INFO",
+        tmp_path / "missing" / "calculator.log",
+    )
+
+    run_interactive(Calculator(), config)
+
+    assert "Unable to configure calculator logging" in capsys.readouterr().out
 
 
 def test_run_interactive_handles_invalid_saved_history(monkeypatch, capsys, tmp_path):

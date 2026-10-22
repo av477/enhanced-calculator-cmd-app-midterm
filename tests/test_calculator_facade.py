@@ -17,6 +17,7 @@ from app.operations import (
     PowerStrategy,
     RootStrategy,
 )
+from app import logger as app_logger
 
 
 def test_calculator_facade_executes_and_tracks_successful_calculations():
@@ -164,7 +165,33 @@ def test_logging_observer_logs_calculation(caplog):
     with caplog.at_level(logging.INFO, logger="app.calculator_observers"):
         calculator.calculate(3, "*", 4)
 
-    assert "3 * 4 = 12" in caplog.text
+    assert "multiply: 3 * 4 = 12" in caplog.text
+
+
+def test_logging_observer_writes_calculation_details_to_file(tmp_path):
+    log_file = tmp_path / "calculator.log"
+    app_logger.configure_logging("INFO", log_file)
+    try:
+        first_handler = app_logger._file_handler
+        app_logger.configure_logging("DEBUG", log_file)
+        assert app_logger._file_handler is first_handler
+
+        replacement_log_file = tmp_path / "replacement.log"
+        app_logger.configure_logging("INFO", replacement_log_file)
+        assert app_logger._file_handler is not first_handler
+
+        Calculator(observers=(LoggingObserver(),)).calculate(3, "*", 4)
+
+        assert first_handler is not None
+        assert first_handler.stream is None
+        log_contents = replacement_log_file.read_text(encoding="utf-8")
+        assert "multiply: 3 * 4 = 12" in log_contents
+    finally:
+        logger = logging.getLogger("app.calculator_observers")
+        if app_logger._file_handler is not None:
+            logger.removeHandler(app_logger._file_handler)
+            app_logger._file_handler.close()
+            app_logger._file_handler = None
 
 
 def test_autosave_observer_writes_calculations_and_tracks_undo_redo(tmp_path):

@@ -13,7 +13,7 @@ Factory, Observer, Memento, and Facade patterns.
 - Persistent CSV history with startup loading and optional automatic saving
 - `help`, `history`, `clear`, `undo`, `redo`, `save`, `load`, and exit commands
 - Input validation and clear errors for invalid input and unsupported results
-- Logging and observer notifications for calculator state changes
+- File-based calculation logging and observer-driven CSV auto-save
 - Pytest suite with 100% statement and branch coverage enforced in CI
 
 ## Requirements
@@ -129,11 +129,14 @@ customize local settings. `.env` is ignored by Git.
 | `CALCULATOR_HISTORY_FILE` | `calculator_history.csv` | History CSV path; must have a `.csv` extension |
 | `CALCULATOR_AUTOSAVE_HISTORY` | `true` | Automatically persist state changes; accepts `true`/`false`, `1`/`0`, `yes`/`no`, and `on`/`off` |
 | `CALCULATOR_LOG_LEVEL` | `INFO` | One of `CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG` |
+| `CALCULATOR_LOG_FILE` | `calculator.log` | File receiving calculation log entries |
 
 The configured CSV is loaded at startup when it exists. When auto-save is
 enabled, successful calculations and history changes (clear, undo, redo, and
 load) are saved automatically. Disabling auto-save leaves manual `save` and
-`load` available. Invalid settings are reported before the REPL starts.
+`load` available. Each successful calculation is logged to the configured log
+file with its operation, operands, and result. Invalid settings are reported
+before the REPL starts.
 
 CSV history stores the first operand, canonical operation name, and second
 operand. Results are recalculated when history is displayed.
@@ -155,12 +158,12 @@ facade with observers and state history:
 
 ```python
 from app.calculator import Calculator
-from app.calculator_observers import AutoSaveHistoryObserver, LoggingObserver
+from app.calculator_observers import AutoSaveObserver, LoggingObserver
 
 calculator = Calculator(
     observers=[
         LoggingObserver(),
-        AutoSaveHistoryObserver("calculator_history.csv"),
+        AutoSaveObserver("calculator_history.csv"),
     ]
 )
 print(calculator.calculate(2, "power", 3))
@@ -173,7 +176,8 @@ calculator.redo()
 - **Strategy and Factory:** `OperationFactory` selects an operation strategy;
   `CalculationFactory` normalizes operation aliases and creates calculations.
 - **Observer:** `Calculator` broadcasts state changes to registered observers.
-  The built-in observers log events and automatically persist CSV history.
+  `LoggingObserver` records calculation details, and `AutoSaveObserver`
+  automatically persists CSV history.
 - **Memento:** immutable `CalculatorMemento` snapshots provide undo and redo.
 - **Facade:** `Calculator` coordinates operations, history, observers, and
   state restoration.

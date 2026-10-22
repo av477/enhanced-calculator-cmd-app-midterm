@@ -35,7 +35,8 @@ class LoggingObserver:
     def update(self, event: CalculationEvent) -> None:
         if event.calculation is not None:
             self._logger.info(
-                "%s %s %s = %s",
+                "%s: %s %s %s = %s",
+                event.calculation.operation,
                 event.calculation.first_number,
                 event.calculation.symbol,
                 event.calculation.second_number,
@@ -45,7 +46,7 @@ class LoggingObserver:
             self._logger.info("Calculator history action: %s", event.action)
 
 
-class AutoSaveHistoryObserver:
+class AutoSaveObserver:
     """Persist the latest calculation history as CSV after every state change."""
 
     def __init__(self, file_path: str | Path) -> None:
@@ -53,3 +54,6 @@ class AutoSaveHistoryObserver:
 
     def update(self, event: CalculationEvent) -> None:
         CalculationHistory(event.history).save_csv(self._file_path)
+
+
+AutoSaveHistoryObserver = AutoSaveObserver

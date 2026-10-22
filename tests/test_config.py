@@ -11,6 +11,7 @@ def test_config_defaults():
     assert config.history_csv_path == Path("calculator_history.csv")
     assert config.autosave_history is True
     assert config.log_level == "INFO"
+    assert config.log_file_path == Path("calculator.log")
 
 
 def test_config_reads_and_validates_environment_values():
@@ -19,12 +20,14 @@ def test_config_reads_and_validates_environment_values():
             "CALCULATOR_HISTORY_FILE": "~/data/history.CSV",
             "CALCULATOR_AUTOSAVE_HISTORY": "off",
             "CALCULATOR_LOG_LEVEL": "debug",
+            "CALCULATOR_LOG_FILE": "~/logs/calculator.log",
         }
     )
 
     assert config.history_csv_path == Path("~/data/history.CSV").expanduser()
     assert config.autosave_history is False
     assert config.log_level == "DEBUG"
+    assert config.log_file_path == Path("~/logs/calculator.log").expanduser()
 
 
 @pytest.mark.parametrize(
@@ -34,6 +37,7 @@ def test_config_reads_and_validates_environment_values():
         ({"CALCULATOR_HISTORY_FILE": "history.json"}, ".csv extension"),
         ({"CALCULATOR_AUTOSAVE_HISTORY": "sometimes"}, "must be true or false"),
         ({"CALCULATOR_LOG_LEVEL": "TRACE"}, "CALCULATOR_LOG_LEVEL"),
+        ({"CALCULATOR_LOG_FILE": " "}, "non-empty path"),
     ],
 )
 def test_config_rejects_invalid_settings(settings, message):
@@ -47,13 +51,15 @@ def test_config_loads_values_from_dotenv_file(tmp_path, monkeypatch):
     dotenv_file.write_text(
         "CALCULATOR_HISTORY_FILE=from-dotenv.csv\n"
         "CALCULATOR_AUTOSAVE_HISTORY=no\n"
-        "CALCULATOR_LOG_LEVEL=WARNING\n",
+        "CALCULATOR_LOG_LEVEL=WARNING\n"
+        "CALCULATOR_LOG_FILE=from-dotenv.log\n",
         encoding="utf-8",
     )
     for key in (
         "CALCULATOR_HISTORY_FILE",
         "CALCULATOR_AUTOSAVE_HISTORY",
         "CALCULATOR_LOG_LEVEL",
+        "CALCULATOR_LOG_FILE",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -62,6 +68,7 @@ def test_config_loads_values_from_dotenv_file(tmp_path, monkeypatch):
     assert config.history_csv_path == Path("from-dotenv.csv")
     assert config.autosave_history is False
     assert config.log_level == "WARNING"
+    assert config.log_file_path == Path("from-dotenv.log")
 
 
 def test_environment_values_override_dotenv_file(tmp_path, monkeypatch):

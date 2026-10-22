@@ -12,7 +12,7 @@ from app.calculator_config import (
     OPERATION_SYMBOLS,
     VALID_OPERATIONS,
 )
-from app.calculator_observers import AutoSaveHistoryObserver, LoggingObserver
+from app.calculator_observers import AutoSaveObserver, LoggingObserver
 from app.config import AppConfig, ConfigurationError
 from app.exceptions import InvalidOperationError
 from app.history import CalculationHistory
@@ -93,7 +93,6 @@ def run_interactive(
     """Run the calculator's read-evaluate-print loop."""
     try:
         config = config or AppConfig.from_environment()
-        configure_logging(config.log_level)
         if calculator is None:
             initial_history = (
                 CalculationHistory.from_csv(config.history_csv_path).get_all()
@@ -107,10 +106,16 @@ def run_interactive(
         print(f"Unable to load calculator history: {exc}")
         return
 
+    try:
+        configure_logging(config.log_level, config.log_file_path)
+    except OSError as exc:
+        print(f"Unable to configure calculator logging: {exc}")
+        return
+
     if calculator is None:
         observers = [LoggingObserver()]
         if config.autosave_history:
-            observers.append(AutoSaveHistoryObserver(config.history_csv_path))
+            observers.append(AutoSaveObserver(config.history_csv_path))
         calculator = Calculator(
             observers=observers,
             initial_history=initial_history,
