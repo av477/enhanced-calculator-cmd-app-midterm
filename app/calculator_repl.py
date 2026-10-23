@@ -14,7 +14,7 @@ from app.calculator_config import (
 )
 from app.calculator_observers import AutoSaveObserver, LoggingObserver
 from app.config import AppConfig, ConfigurationError
-from app.exceptions import InvalidOperationError
+from app.exceptions import HistoryDataError, InvalidOperationError
 from app.history import CalculationHistory
 from app.input_validators import parse_number
 from app.logger import configure_logging
@@ -235,6 +235,8 @@ def run_interactive(
         except (EOFError, KeyboardInterrupt):
             print("\nGoodbye!")
             break
+        except HistoryDataError as exc:
+            print(f"History data error: {exc}")
         except ValueError as exc:
             print(f"Error: {exc}")
         except ZeroDivisionError as exc:

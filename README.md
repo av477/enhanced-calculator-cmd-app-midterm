@@ -99,6 +99,9 @@ numbers, and results outside the supported real-number domain are reported as
 errors; failed calculations are not added to history. Modulus, integer
 division, and percentage reject a zero second operand. Integer division
 truncates toward zero (for example, dividing `-17` by `5` returns `-3`).
+Malformed numeric inputs, unsupported operations, and calculation-domain
+errors produce actionable messages without adding failed calculations to
+history. CSV parsing problems and file access failures are reported separately.
 
 ## REPL commands
 

@@ -345,6 +345,27 @@ def test_run_interactive_reports_missing_file_on_load_and_continues(
     assert "Goodbye!" in output
 
 
+def test_run_interactive_reports_invalid_csv_data_and_continues(
+    monkeypatch, capsys, tmp_path
+):
+    from app.calculator import Calculator
+    from app.config import AppConfig
+    from app.calculator_repl import run_interactive
+
+    history_file = tmp_path / "invalid.csv"
+    history_file.write_text("", encoding="utf-8")
+    config = AppConfig(history_file, False, "INFO")
+    responses = iter(["load", "history", "exit"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(responses))
+
+    run_interactive(Calculator(), config)
+
+    output = capsys.readouterr().out
+    assert "History data error: Unable to read calculator history" in output
+    assert "No calculations in history." in output
+    assert "Goodbye!" in output
+
+
 def test_run_interactive_loads_existing_history_and_appends_to_csv(
     monkeypatch, capsys, tmp_path
 ):

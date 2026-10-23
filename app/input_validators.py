@@ -13,7 +13,7 @@ def parse_number(
     """Convert an input string to a finite float or raise a helpful error."""
     try:
         number = float(raw_value)
-    except ValueError as exc:
+    except (TypeError, ValueError) as exc:
         raise InvalidNumberError(
             f"Invalid {label} number: {raw_value!r}. Please enter a valid number."
         ) from exc

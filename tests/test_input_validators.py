@@ -1,6 +1,6 @@
 import pytest
 
-from app.exceptions import InvalidNumberError
+from app.exceptions import InvalidNumberError, ValidationError
 from app.input_validators import parse_number
 
 
@@ -19,7 +19,7 @@ def test_parse_number_accepts_finite_numeric_inputs(raw_value, expected):
 
 @pytest.mark.parametrize("raw_value", ["", "abc", "2.3.4", "1/2"])
 def test_parse_number_rejects_malformed_input(raw_value):
-    with pytest.raises(InvalidNumberError, match="Please enter a valid number"):
+    with pytest.raises(ValidationError, match="Please enter a valid number"):
         parse_number(raw_value, "operand")
 
 
@@ -32,6 +32,11 @@ def test_parse_number_rejects_non_finite_input(raw_value):
 def test_parse_number_includes_operand_label_and_value_in_error():
     with pytest.raises(InvalidNumberError, match="Invalid second number: 'oops'"):
         parse_number("oops", "second")
+
+
+def test_parse_number_rejects_non_string_input():
+    with pytest.raises(InvalidNumberError, match="Please enter a valid number"):
+        parse_number(None, "first")  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(("raw_value", "expected"), [("10", 10), ("-10", -10)])

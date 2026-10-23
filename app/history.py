@@ -8,6 +8,7 @@ import pandas as pd
 
 from app.calculation import Calculation, CalculationFactory
 from app.calculator_memento import CalculatorMemento
+from app.exceptions import HistoryDataError, HistoryFileError
 
 
 class CalculationHistory:
@@ -50,8 +51,13 @@ class CalculationHistory:
     def save_csv(self, file_path: str | Path, encoding: str = "utf-8") -> None:
         """Persist the history table to a CSV file."""
         path = Path(file_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self._dataframe.to_csv(path, index=False, encoding=encoding)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self._dataframe.to_csv(path, index=False, encoding=encoding)
+        except (OSError, UnicodeError, LookupError) as exc:
+            raise HistoryFileError(
+                f"Unable to save calculator history to {path}: {exc}"
+            ) from exc
 
     @classmethod
     def from_csv(
@@ -61,17 +67,34 @@ class CalculationHistory:
         max_size: int | None = None,
     ) -> "CalculationHistory":
         """Load calculations from a CSV file, rejecting incomplete records."""
-        dataframe = pd.read_csv(
-            file_path,
-            keep_default_na=False,
-            encoding=encoding,
-        )
+        path = Path(file_path)
+        try:
+            dataframe = pd.read_csv(
+                path,
+                keep_default_na=False,
+                encoding=encoding,
+            )
+        except OSError as exc:
+            raise HistoryFileError(
+                f"Unable to read calculator history from {path}: {exc}"
+            ) from exc
+        except (pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
+            raise HistoryDataError(
+                f"Unable to read calculator history from {path}: {exc}"
+            ) from exc
+        except UnicodeError as exc:
+            raise HistoryDataError(
+                f"Unable to decode calculator history at {path} "
+                f"using {encoding}: {exc}"
+            ) from exc
         missing_columns = set(cls.COLUMNS).difference(dataframe.columns)
         if missing_columns:
             missing = ", ".join(sorted(missing_columns))
-            raise ValueError(f"History CSV is missing required columns: {missing}")
+            raise HistoryDataError(
+                f"History CSV is missing required columns: {missing}"
+            )
         if dataframe[list(cls.COLUMNS)].eq("").any().any():
-            raise ValueError("History CSV contains empty calculation values.")
+            raise HistoryDataError("History CSV contains empty calculation values.")
 
         history = cls(max_size=max_size)
         for first_number, operation, second_number in dataframe[
@@ -81,17 +104,19 @@ class CalculationHistory:
                 first_number = float(first_number)
                 second_number = float(second_number)
             except (TypeError, ValueError) as exc:
-                raise ValueError(
+                raise HistoryDataError(
                     "History CSV contains non-numeric calculation values."
                 ) from exc
             if not math.isfinite(first_number) or not math.isfinite(second_number):
-                raise ValueError("History CSV contains non-finite numbers.")
+                raise HistoryDataError("History CSV contains non-finite numbers.")
             try:
                 calculation = CalculationFactory.create_calculation(
                     first_number, str(operation), second_number
                 )
             except ValueError as exc:
-                raise ValueError("History CSV contains an invalid operation.") from exc
+                raise HistoryDataError(
+                    "History CSV contains an invalid operation."
+                ) from exc
             history.add(calculation)
         return history
 

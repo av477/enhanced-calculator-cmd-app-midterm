@@ -6,6 +6,7 @@ from app.calculation import (
     calculate,
     evaluate_expression,
 )
+from app.exceptions import OperationError
 
 
 @pytest.mark.parametrize(
@@ -90,7 +91,7 @@ def test_calculation_factory_normalizes_aliases(
 
 @pytest.mark.parametrize("operation", ["", "foo", "sqrt"])
 def test_calculation_factory_rejects_invalid_operations(operation):
-    with pytest.raises(ValueError, match="Invalid operation"):
+    with pytest.raises(OperationError, match="Invalid operation"):
         CalculationFactory.create_calculation(8, operation, 2)
 
 

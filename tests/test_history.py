@@ -3,6 +3,7 @@ import pytest
 
 from app.calculation import CalculationFactory
 from app.calculator_memento import CalculatorMemento
+from app.exceptions import HistoryDataError, HistoryFileError
 from app.history import CalculationHistory
 
 
@@ -120,3 +121,33 @@ def test_history_rejects_invalid_csv(tmp_path, contents, message):
 
     with pytest.raises(ValueError, match=message):
         CalculationHistory.from_csv(file_path)
+
+
+def test_history_reports_empty_csv_as_data_error(tmp_path):
+    file_path = tmp_path / "empty.csv"
+    file_path.write_text("", encoding="utf-8")
+
+    with pytest.raises(HistoryDataError, match="Unable to read calculator history"):
+        CalculationHistory.from_csv(file_path)
+
+
+def test_history_reports_missing_csv_as_file_error(tmp_path):
+    with pytest.raises(HistoryFileError, match="Unable to read calculator history"):
+        CalculationHistory.from_csv(tmp_path / "missing.csv")
+
+
+def test_history_reports_encoding_failure_as_data_error(tmp_path):
+    file_path = tmp_path / "wrong-encoding.csv"
+    file_path.write_bytes(b"\xff\xfe")
+
+    with pytest.raises(HistoryDataError, match="Unable to decode calculator history"):
+        CalculationHistory.from_csv(file_path, encoding="utf-8")
+
+
+def test_history_reports_csv_write_errors_as_file_error(tmp_path):
+    not_a_directory = tmp_path / "file"
+    not_a_directory.write_text("block", encoding="utf-8")
+    history = CalculationHistory()
+
+    with pytest.raises(HistoryFileError, match="Unable to save calculator history"):
+        history.save_csv(not_a_directory / "history.csv")
