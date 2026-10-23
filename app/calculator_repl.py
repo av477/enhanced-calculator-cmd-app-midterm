@@ -65,7 +65,10 @@ def _print_help() -> None:
     )
 
 
-def _print_history(history: tuple[Calculation, ...]) -> None:
+def _print_history(
+    history: tuple[Calculation, ...],
+    precision: int | None = None,
+) -> None:
     """Display successful calculations recorded during this session."""
     if not history:
         print("No calculations in history.")
@@ -73,6 +76,8 @@ def _print_history(history: tuple[Calculation, ...]) -> None:
 
     for index, calculation in enumerate(history, start=1):
         result = calculation.calculate()
+        if precision is not None:
+            result = round(result, precision)
         if calculation.operation == "root":
             expression = (
                 f"{calculation.second_number}{_display_symbol('root')}"
@@ -95,7 +100,11 @@ def run_interactive(
         config = config or AppConfig.from_environment()
         if calculator is None:
             initial_history = (
-                CalculationHistory.from_csv(config.history_csv_path).get_all()
+                CalculationHistory.from_csv(
+                    config.history_csv_path,
+                    encoding=config.default_encoding,
+                    max_size=config.max_history_size,
+                ).get_all()
                 if config.history_csv_path.exists()
                 else ()
             )
@@ -107,7 +116,11 @@ def run_interactive(
         return
 
     try:
-        configure_logging(config.log_level, config.log_file_path)
+        configure_logging(
+            config.log_level,
+            config.log_file_path,
+            encoding=config.default_encoding,
+        )
     except OSError as exc:
         print(f"Unable to configure calculator logging: {exc}")
         return
@@ -115,10 +128,17 @@ def run_interactive(
     if calculator is None:
         observers = [LoggingObserver()]
         if config.autosave_history:
-            observers.append(AutoSaveObserver(config.history_csv_path))
+            observers.append(
+                AutoSaveObserver(
+                    config.history_csv_path,
+                    encoding=config.default_encoding,
+                )
+            )
         calculator = Calculator(
             observers=observers,
             initial_history=initial_history,
+            max_history_size=config.max_history_size,
+            precision=config.precision,
         )
     print("-------------------- Enhanced Calculator --------------------")
     print("Available operations: " + ", ".join(OPERATION_ALIASES))
@@ -151,7 +171,7 @@ def run_interactive(
                 _print_help()
                 continue
             if command == "history":
-                _print_history(calculator.history)
+                _print_history(calculator.history, config.precision)
                 continue
             if command == "clear":
                 calculator.clear_history()
@@ -172,11 +192,18 @@ def run_interactive(
                 )
                 continue
             if command == "save":
-                CalculationHistory(calculator.history).save_csv(history_path)
+                CalculationHistory(calculator.history).save_csv(
+                    history_path,
+                    encoding=config.default_encoding,
+                )
                 print(f"History saved to {history_path}.")
                 continue
             if command == "load":
-                loaded_history = CalculationHistory.from_csv(history_path)
+                loaded_history = CalculationHistory.from_csv(
+                    history_path,
+                    encoding=config.default_encoding,
+                    max_size=config.max_history_size,
+                )
                 calculator.load_history(loaded_history.get_all())
                 print(f"History loaded from {history_path}.")
                 continue
@@ -192,6 +219,7 @@ def run_interactive(
                     else "Enter the first number: "
                 ).strip(),
                 "first",
+                maximum=config.max_input_value,
             )
             second_number = parse_number(
                 input(
@@ -200,6 +228,7 @@ def run_interactive(
                     else "Enter the second number: "
                 ).strip(),
                 "second",
+                maximum=config.max_input_value,
             )
             result = calculator.calculate(first_number, command, second_number)
             print(f"Result: {result}")

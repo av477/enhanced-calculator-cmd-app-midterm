@@ -15,14 +15,22 @@ class CalculationHistory:
 
     COLUMNS = ("first_number", "operation", "second_number")
 
-    def __init__(self, calculations: Iterable[Calculation] = ()) -> None:
+    def __init__(
+        self,
+        calculations: Iterable[Calculation] = (),
+        max_size: int | None = None,
+    ) -> None:
         """Initialize history from an optional collection of calculations."""
+        self._validate_max_size(max_size)
+        self._max_size = max_size
         self._dataframe = self._dataframe_from_calculations(calculations)
+        self._trim_to_max_size()
 
     def add(self, calculation: Calculation) -> None:
         """Append a successful calculation to history."""
         row = self._dataframe_from_calculations((calculation,))
         self._dataframe = pd.concat([self._dataframe, row], ignore_index=True)
+        self._trim_to_max_size()
 
     def get_all(self) -> tuple[Calculation, ...]:
         """Reconstruct an immutable view of the stored calculations."""
@@ -39,16 +47,25 @@ class CalculationHistory:
         """Return a copy of the history table."""
         return self._dataframe.copy()
 
-    def save_csv(self, file_path: str | Path) -> None:
+    def save_csv(self, file_path: str | Path, encoding: str = "utf-8") -> None:
         """Persist the history table to a CSV file."""
         path = Path(file_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        self._dataframe.to_csv(path, index=False)
+        self._dataframe.to_csv(path, index=False, encoding=encoding)
 
     @classmethod
-    def from_csv(cls, file_path: str | Path) -> "CalculationHistory":
+    def from_csv(
+        cls,
+        file_path: str | Path,
+        encoding: str = "utf-8",
+        max_size: int | None = None,
+    ) -> "CalculationHistory":
         """Load calculations from a CSV file, rejecting incomplete records."""
-        dataframe = pd.read_csv(file_path, keep_default_na=False)
+        dataframe = pd.read_csv(
+            file_path,
+            keep_default_na=False,
+            encoding=encoding,
+        )
         missing_columns = set(cls.COLUMNS).difference(dataframe.columns)
         if missing_columns:
             missing = ", ".join(sorted(missing_columns))
@@ -56,7 +73,7 @@ class CalculationHistory:
         if dataframe[list(cls.COLUMNS)].eq("").any().any():
             raise ValueError("History CSV contains empty calculation values.")
 
-        history = cls()
+        history = cls(max_size=max_size)
         for first_number, operation, second_number in dataframe[
             list(cls.COLUMNS)
         ].itertuples(index=False, name=None):
@@ -85,6 +102,23 @@ class CalculationHistory:
     def restore(self, memento: CalculatorMemento) -> None:
         """Replace the current history with a previously captured snapshot."""
         self._dataframe = self._dataframe_from_calculations(memento.calculations)
+        self._trim_to_max_size()
+
+    def _trim_to_max_size(self) -> None:
+        """Discard oldest records when history exceeds its configured limit."""
+        if self._max_size is not None and len(self._dataframe) > self._max_size:
+            self._dataframe = self._dataframe.tail(self._max_size).reset_index(
+                drop=True
+            )
+
+    @staticmethod
+    def _validate_max_size(max_size: int | None) -> None:
+        if max_size is not None and (
+            isinstance(max_size, bool)
+            or not isinstance(max_size, int)
+            or max_size < 1
+        ):
+            raise ValueError("max_size must be a positive integer.")
 
     @classmethod
     def _dataframe_from_calculations(

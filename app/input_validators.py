@@ -5,7 +5,11 @@ import math
 from app.exceptions import InvalidNumberError
 
 
-def parse_number(raw_value: str, label: str) -> float:
+def parse_number(
+    raw_value: str,
+    label: str,
+    maximum: float | None = None,
+) -> float:
     """Convert an input string to a finite float or raise a helpful error."""
     try:
         number = float(raw_value)
@@ -18,5 +22,9 @@ def parse_number(raw_value: str, label: str) -> float:
         raise InvalidNumberError(
             f"Invalid {label} number: {raw_value!r}. Please enter a finite number."
         )
+    if maximum is not None and abs(number) > maximum:
+        raise InvalidNumberError(
+            f"Invalid {label} number: {raw_value!r}. "
+            f"Absolute value must not exceed {maximum}."
+        )
     return number
-

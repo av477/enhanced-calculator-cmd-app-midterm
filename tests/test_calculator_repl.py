@@ -17,6 +17,13 @@ def isolate_history_file(monkeypatch, tmp_path):
         "CALCULATOR_AUTOSAVE_HISTORY",
         "CALCULATOR_LOG_LEVEL",
         "CALCULATOR_LOG_FILE",
+        "CALCULATOR_LOG_DIR",
+        "CALCULATOR_HISTORY_DIR",
+        "CALCULATOR_MAX_HISTORY_SIZE",
+        "CALCULATOR_AUTO_SAVE",
+        "CALCULATOR_PRECISION",
+        "CALCULATOR_MAX_INPUT_VALUE",
+        "CALCULATOR_DEFAULT_ENCODING",
     ):
         monkeypatch.delenv(name, raising=False)
     yield
@@ -27,6 +34,7 @@ def isolate_history_file(monkeypatch, tmp_path):
         logger.removeHandler(app_logger._file_handler)
         app_logger._file_handler.close()
         app_logger._file_handler = None
+        app_logger._file_encoding = None
 
 
 def test_run_interactive_handles_valid_and_invalid_operations(
@@ -51,6 +59,39 @@ def test_run_interactive_handles_valid_and_invalid_operations(
     assert "divide" not in log_contents
 
 
+def test_run_interactive_applies_configured_limits_and_directories(
+    monkeypatch, capsys, tmp_path
+):
+    monkeypatch.setenv("CALCULATOR_LOG_DIR", "logs")
+    monkeypatch.setenv("CALCULATOR_HISTORY_DIR", "history")
+    monkeypatch.setenv("CALCULATOR_MAX_HISTORY_SIZE", "2")
+    monkeypatch.setenv("CALCULATOR_AUTO_SAVE", "true")
+    monkeypatch.setenv("CALCULATOR_PRECISION", "2")
+    monkeypatch.setenv("CALCULATOR_MAX_INPUT_VALUE", "10")
+    monkeypatch.setenv("CALCULATOR_DEFAULT_ENCODING", "cp1252")
+    responses = iter(
+        ["add", "1", "3", "divide", "1", "3", "add", "11", "1", "exit"]
+    )
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(responses))
+
+    from app.calculator_repl import run_interactive
+
+    run_interactive()
+
+    output = capsys.readouterr().out
+    assert "Result: 4.0" in output
+    assert "Result: 0.33" in output
+    assert "Absolute value must not exceed 10" in output
+    history_file = tmp_path / "history" / "calculator_history.csv"
+    log_file = tmp_path / "logs" / "calculator.log"
+    assert history_file.is_file()
+    assert log_file.is_file()
+    assert len(history_file.read_text(encoding="cp1252").splitlines()) == 3
+    assert "divide: 1.0 / 3.0 = 0.33" in log_file.read_text(
+        encoding="cp1252"
+    )
+
+
 def test_run_interactive_help_history_and_exit(monkeypatch, capsys):
     responses = iter(["help", "history", "add", "4", "2", "history", "exit"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(responses))
@@ -64,6 +105,17 @@ def test_run_interactive_help_history_and_exit(monkeypatch, capsys):
     assert "No calculations in history." in captured.out
     assert "1. 4.0 + 2.0 = 6.0" in captured.out
     assert "Goodbye!" in captured.out
+
+
+def test_print_history_without_precision_keeps_full_result(capsys):
+    from app.calculation import CalculationFactory
+    from app.calculator_repl import _print_history
+
+    calculation = CalculationFactory.create_calculation(1, "/", 3)
+
+    _print_history((calculation,))
+
+    assert "1. 1 / 3 = 0.3333333333333333" in capsys.readouterr().out
 
 
 def test_run_interactive_handles_end_of_input(monkeypatch, capsys):
@@ -109,11 +161,13 @@ def test_run_interactive_reports_logging_file_errors(tmp_path, capsys):
     from app.calculator_repl import run_interactive
     from app.config import AppConfig
 
+    blocked_directory = tmp_path / "not-a-directory"
+    blocked_directory.write_text("block directory creation", encoding="utf-8")
     config = AppConfig(
         tmp_path / "history.csv",
         False,
         "INFO",
-        tmp_path / "missing" / "calculator.log",
+        blocked_directory / "calculator.log",
     )
 
     run_interactive(Calculator(), config)

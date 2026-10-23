@@ -49,11 +49,15 @@ class LoggingObserver:
 class AutoSaveObserver:
     """Persist the latest calculation history as CSV after every state change."""
 
-    def __init__(self, file_path: str | Path) -> None:
+    def __init__(self, file_path: str | Path, encoding: str = "utf-8") -> None:
         self._file_path = Path(file_path)
+        self._encoding = encoding
 
     def update(self, event: CalculationEvent) -> None:
-        CalculationHistory(event.history).save_csv(self._file_path)
+        CalculationHistory(event.history).save_csv(
+            self._file_path,
+            encoding=self._encoding,
+        )
 
 
 AutoSaveHistoryObserver = AutoSaveObserver

@@ -126,10 +126,23 @@ customize local settings. `.env` is ignored by Git.
 
 | Variable | Default | Description |
 | --- | --- | --- |
+| `CALCULATOR_LOG_DIR` | `.` | Base directory for relative log file paths |
+| `CALCULATOR_HISTORY_DIR` | `.` | Base directory for relative history file paths |
 | `CALCULATOR_HISTORY_FILE` | `calculator_history.csv` | History CSV path; must have a `.csv` extension |
-| `CALCULATOR_AUTOSAVE_HISTORY` | `true` | Automatically persist state changes; accepts `true`/`false`, `1`/`0`, `yes`/`no`, and `on`/`off` |
+| `CALCULATOR_MAX_HISTORY_SIZE` | `1000` | Maximum number of history entries to retain |
+| `CALCULATOR_AUTO_SAVE` | `true` | Automatically persist state changes; accepts `true`/`false`, `1`/`0`, `yes`/`no`, and `on`/`off` |
+| `CALCULATOR_PRECISION` | `10` | Decimal places to round calculation results to (0–15) |
+| `CALCULATOR_MAX_INPUT_VALUE` | `1e308` | Maximum absolute value accepted for each input |
+| `CALCULATOR_DEFAULT_ENCODING` | `utf-8` | Encoding used for history and log file operations |
 | `CALCULATOR_LOG_LEVEL` | `INFO` | One of `CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG` |
 | `CALCULATOR_LOG_FILE` | `calculator.log` | File receiving calculation log entries |
+
+Relative history and log filenames are resolved under their respective base
+directories. Absolute filenames are used as provided. The legacy
+`CALCULATOR_AUTOSAVE_HISTORY` setting remains supported when
+`CALCULATOR_AUTO_SAVE` is not set. History size must be at least 1, precision
+must be 0–15 decimal places, and the maximum input must be a positive finite
+number.
 
 The configured CSV is loaded at startup when it exists. When auto-save is
 enabled, successful calculations and history changes (clear, undo, redo, and

@@ -81,6 +81,16 @@ def test_multiple_undo_redo_steps_restore_each_history_snapshot():
     assert calculator.redo() is False
 
 
+def test_calculator_applies_history_limit_and_result_precision():
+    calculator = Calculator(max_history_size=2, precision=2)
+
+    assert calculator.calculate(1, "/", 3) == 0.33
+    calculator.calculate(2, "+", 3)
+    calculator.calculate(4, "+", 5)
+
+    assert [item.first_number for item in calculator.history] == [2, 4]
+
+
 def test_clear_history_can_be_undone_and_redone():
     calculator = Calculator()
     calculator.calculate(2, "+", 3)
@@ -192,6 +202,7 @@ def test_logging_observer_writes_calculation_details_to_file(tmp_path):
             logger.removeHandler(app_logger._file_handler)
             app_logger._file_handler.close()
             app_logger._file_handler = None
+            app_logger._file_encoding = None
 
 
 def test_autosave_observer_writes_calculations_and_tracks_undo_redo(tmp_path):

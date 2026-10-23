@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from app.calculation import CalculationFactory
+from app.calculator_memento import CalculatorMemento
 from app.history import CalculationHistory
 
 
@@ -25,6 +26,36 @@ def test_history_memento_restores_a_previous_snapshot():
     history.restore(memento)
 
     assert history.get_all() == (first,)
+
+
+def test_history_retains_only_the_most_recent_entries():
+    calculations = [
+        CalculationFactory.create_calculation(value, "+", 1)
+        for value in (1, 2, 3)
+    ]
+    history = CalculationHistory(calculations[:2], max_size=2)
+
+    history.add(calculations[2])
+
+    assert history.get_all() == tuple(calculations[1:])
+
+
+def test_history_limit_applies_when_restoring_a_memento():
+    calculations = [
+        CalculationFactory.create_calculation(value, "+", 1)
+        for value in (1, 2, 3)
+    ]
+    history = CalculationHistory(max_size=2)
+
+    history.restore(CalculatorMemento(tuple(calculations)))
+
+    assert history.get_all() == tuple(calculations[1:])
+
+
+@pytest.mark.parametrize("max_size", [0, -1, True, 1.5, "2"])
+def test_history_rejects_invalid_maximum_size(max_size):
+    with pytest.raises(ValueError, match="positive integer"):
+        CalculationHistory(max_size=max_size)
 
 
 def test_history_uses_a_dataframe_and_returns_a_copy():
@@ -52,6 +83,25 @@ def test_history_saves_and_loads_csv(tmp_path):
     loaded = CalculationHistory.from_csv(file_path)
 
     assert loaded.get_all() == history.get_all()
+
+
+def test_history_uses_configured_encoding_and_limit_for_csv(tmp_path):
+    history = CalculationHistory(
+        [
+            CalculationFactory.create_calculation(value, "+", 1)
+            for value in (1, 2, 3)
+        ]
+    )
+    file_path = tmp_path / "history.csv"
+
+    history.save_csv(file_path, encoding="cp1252")
+    loaded = CalculationHistory.from_csv(
+        file_path,
+        encoding="cp1252",
+        max_size=2,
+    )
+
+    assert [item.first_number for item in loaded.get_all()] == [2, 3]
 
 
 @pytest.mark.parametrize(
