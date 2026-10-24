@@ -14,7 +14,8 @@ Factory, Observer, Memento, and Facade patterns.
 - `help`, `history`, `clear`, `undo`, `redo`, `save`, `load`, and exit commands
 - Input validation and clear errors for invalid input and unsupported results
 - File-based calculation logging and observer-driven CSV auto-save
-- Pytest suite with 100% statement and branch coverage enforced in CI
+- Pytest suite with statement and branch coverage measured in CI; CI requires
+  at least 90% total coverage
 
 ## Requirements
 
@@ -127,6 +128,22 @@ in the working directory. Process environment variables take precedence over
 `.env`. The checked-in `.env.example` lists the defaults; copy it to `.env` to
 customize local settings. `.env` is ignored by Git.
 
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+macOS or Linux:
+
+```bash
+cp .env.example .env
+```
+
+The calculator loads `.env` when the REPL starts. Leave values unchanged to
+use defaults, or edit them as `KEY=value` entries. Process environment
+variables override values in the file.
+
 | Variable | Default | Description |
 | --- | --- | --- |
 | `CALCULATOR_LOG_DIR` | `.` | Base directory for relative log file paths |
@@ -147,6 +164,14 @@ directories. Absolute filenames are used as provided. The legacy
 must be 0–15 decimal places, and the maximum input must be a positive finite
 number.
 
+Logging is enabled by default at `INFO` level and writes to
+`CALCULATOR_LOG_FILE`. Relative log paths are placed under
+`CALCULATOR_LOG_DIR`; parent directories are created as needed. Successful
+calculations and history/session events are logged at INFO, invalid input and
+failed operations at WARNING, and history/data or file failures at ERROR.
+`CALCULATOR_LOG_LEVEL` sets the minimum severity written to the file; select
+any supported level from the table above.
+
 The configured CSV is loaded at startup when it exists. When auto-save is
 enabled, successful calculations and history changes (clear, undo, redo, and
 load) are saved automatically. Disabling auto-save leaves manual `save` and
@@ -155,7 +180,7 @@ file with its operation, operands, and result. Invalid settings are reported
 before the REPL starts.
 
 CSV history stores the canonical operation, both operands, the calculated
-result, and an ISO-8601 UTC timestamp. Loading validates result values and
+result, and an ISO-8601 timestamp in UTC. Loading validates result values and
 timestamps and reconstructs calculation records with their original
 timestamps. Legacy CSV files containing only operation and operands remain
 loadable; their results are calculated and timestamps are assigned on load.
@@ -232,7 +257,6 @@ tests/
     test_history.py
     test_input_validators.py
     test_operations.py
-.env
 .env.example
 pyproject.toml
 README.md
@@ -249,11 +273,15 @@ Run all tests:
 python -m pytest
 ```
 
-Measure statement and branch coverage and require both to reach 100%:
+Measure statement and branch coverage and enforce the same 90% minimum used by
+CI:
 
 ```console
-python -m pytest --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=100
+python -m pytest --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=90
 ```
+
+The test suite currently reaches 100% statement and branch coverage. You can
+use `--cov-fail-under=100` locally to enforce that stricter target.
 
 Coverage exclusions should be reserved for code that cannot meaningfully be
 exercised. `# pragma: no cover` excludes a marked line (and may exclude a
@@ -263,6 +291,10 @@ add tests for those paths. This project currently has no coverage exclusions.
 
 ## Continuous integration
 
-The GitHub Actions workflow at `.github/workflows/python-app.yml` installs
-the project and development dependencies, runs pytest with branch coverage,
-and fails if total coverage is below 100%.
+The GitHub Actions workflow at `.github/workflows/python-app.yml` runs on
+pushes to `main` and pull requests targeting `main`. It checks out the
+repository, sets up Python 3.11, installs the project and development
+dependencies from `pyproject.toml`, and runs pytest with statement and branch
+coverage. The workflow fails if total coverage is below 90%. No
+`requirements.txt` is needed because runtime and development dependencies are
+declared in `pyproject.toml`.
