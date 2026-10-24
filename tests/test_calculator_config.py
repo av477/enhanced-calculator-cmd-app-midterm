@@ -18,11 +18,15 @@ from app.calculator_config import (
         ("power", ("power", "pow", "^"), "^"),
         ("root", ("root", "nthroot", "√"), "√"),
         ("modulus", ("modulus", "mod", "%"), "%"),
-        ("integer_division", ("integer_division", "intdiv", "//"), "//"),
+        (
+            "integer_division",
+            ("integer_division", "int_divide", "intdiv", "//"),
+            "//",
+        ),
         ("percentage", ("percentage", "percent", "pct"), "pct"),
         (
             "absolute_difference",
-            ("absolute_difference", "absdiff", "abs"),
+            ("absolute_difference", "abs_diff", "absdiff", "abs"),
             "abs",
         ),
     ],

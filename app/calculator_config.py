@@ -8,9 +8,9 @@ OPERATION_ALIASES = {
     "power": ("power", "pow", "^"),
     "root": ("root", "nthroot", "√"),
     "modulus": ("modulus", "mod", "%"),
-    "integer_division": ("integer_division", "intdiv", "//"),
+    "integer_division": ("integer_division", "int_divide", "intdiv", "//"),
     "percentage": ("percentage", "percent", "pct"),
-    "absolute_difference": ("absolute_difference", "absdiff", "abs"),
+    "absolute_difference": ("absolute_difference", "abs_diff", "absdiff", "abs"),
 }
 OPERATION_SYMBOLS = {
     name: aliases[-1] for name, aliases in OPERATION_ALIASES.items()

@@ -90,9 +90,9 @@ degree. Zero-degree roots and non-real results are rejected.
 | Power | `power`, `pow`, `^` | first raised to second |
 | Nth root | `root`, `nthroot`, `√` | root of first with degree second |
 | Modulus | `modulus`, `mod`, `%` | remainder of first divided by second |
-| Integer division | `integer_division`, `intdiv`, `//` | quotient truncated toward zero |
+| Integer division | `integer_division`, `int_divide`, `intdiv`, `//` | quotient truncated toward zero |
 | Percentage | `percentage`, `percent`, `pct` | `(first / second) * 100` |
-| Absolute difference | `absolute_difference`, `absdiff`, `abs` | `abs(first - second)` |
+| Absolute difference | `absolute_difference`, `abs_diff`, `absdiff`, `abs` | `abs(first - second)` |
 
 Inputs must be finite numbers. Division by zero, invalid operations, malformed
 numbers, and results outside the supported real-number domain are reported as

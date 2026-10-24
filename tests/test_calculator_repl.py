@@ -106,6 +106,9 @@ def test_run_interactive_help_history_and_exit(monkeypatch, capsys):
     assert "Commands: help, history, clear, undo, redo, save, load, exit" in captured.out
     assert "No calculations in history." in captured.out
     assert "1. 4.0 + 2.0 = 6.0" in captured.out
+    assert "int_divide" in captured.out
+    assert "percent" in captured.out
+    assert "abs_diff" in captured.out
     assert "Goodbye!" in captured.out
 
 
@@ -315,9 +318,9 @@ def test_run_interactive_power_and_root_show_results_and_history(monkeypatch, ca
     ("operation", "first_number", "second_number", "expected"),
     [
         ("mod", "17", "5", "Result: 2.0"),
-        ("intdiv", "-17", "5", "Result: -3.0"),
+        ("int_divide", "-17", "5", "Result: -3.0"),
         ("percent", "12", "30", "Result: 40.0"),
-        ("absdiff", "4", "10", "Result: 6.0"),
+        ("abs_diff", "4", "10", "Result: 6.0"),
     ],
 )
 def test_run_interactive_supports_additional_operations(
