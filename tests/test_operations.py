@@ -1,5 +1,6 @@
 import pytest
 
+from app.exceptions import OperationError, ValidationError
 from app.operations import (
     absolute_difference,
     add,
@@ -87,9 +88,9 @@ def test_power(base, exponent, expected):
 
 
 def test_power_rejects_non_real_results_and_overflow():
-    with pytest.raises(ValueError, match="real number"):
+    with pytest.raises(OperationError, match="real number"):
         power(-2, 0.5)
-    with pytest.raises(ValueError, match="numeric range"):
+    with pytest.raises(OperationError, match="numeric range"):
         power(1e308, 2)
 
 
@@ -115,7 +116,7 @@ def test_root_rejects_invalid_degrees(radicand, degree, message):
 
 @pytest.mark.parametrize(("radicand", "degree"), [(-16, 2), (-16, 2.5)])
 def test_root_rejects_non_real_negative_roots(radicand, degree):
-    with pytest.raises(ValueError, match="odd integer"):
+    with pytest.raises(OperationError, match="odd integer"):
         root(radicand, degree)
 
 

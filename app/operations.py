@@ -5,7 +5,7 @@ import math
 from typing import Protocol
 
 from app.calculator_config import VALID_OPERATIONS
-from app.exceptions import DivisionByZeroError
+from app.exceptions import DivisionByZeroError, OperationError
 
 
 class OperationStrategy(Protocol):
@@ -62,12 +62,12 @@ class PowerStrategy:
         try:
             result = first_number**second_number
         except OverflowError as exc:
-            raise ValueError(
+            raise OperationError(
                 "Power result is outside the supported numeric range."
             ) from exc
 
         if isinstance(result, complex):
-            raise ValueError("Power operation must produce a real number.")
+            raise OperationError("Power operation must produce a real number.")
         return result
 
 
@@ -85,7 +85,7 @@ class RootStrategy:
         degree = float(second_number)
         if first_number < 0:
             if not degree.is_integer() or int(degree) % 2 == 0:
-                raise ValueError(
+                raise OperationError(
                     "A negative number requires an odd integer root degree."
                 )
             return -(abs(first_number) ** (1 / degree))
@@ -113,7 +113,7 @@ class IntegerDivisionStrategy:
             raise DivisionByZeroError("Cannot divide by zero.")
         quotient = first_number / second_number
         if not math.isfinite(quotient):
-            raise ValueError(
+            raise OperationError(
                 "Integer division result is outside the supported numeric range."
             )
         return float(int(quotient))
@@ -163,7 +163,7 @@ class OperationFactory:
         normalized_operation = operation.strip().lower()
         canonical_operation = VALID_OPERATIONS.get(normalized_operation)
         if canonical_operation is None:
-            raise ValueError(f"Invalid operation: {operation}")
+            raise OperationError(f"Invalid operation: {operation}")
         return cls._strategies[canonical_operation]()
 
 

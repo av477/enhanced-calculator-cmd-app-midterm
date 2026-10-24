@@ -2,9 +2,13 @@ import pytest
 
 from app.exceptions import (
     DivisionByZeroError,
+    HistoryDataError,
+    HistoryFileError,
     InvalidExpressionError,
     InvalidNumberError,
     InvalidOperationError,
+    OperationError,
+    ValidationError,
 )
 
 
@@ -15,6 +19,10 @@ from app.exceptions import (
         (InvalidNumberError, ValueError, "Invalid number"),
         (InvalidExpressionError, ValueError, "Malformed expression"),
         (DivisionByZeroError, ZeroDivisionError, "Cannot divide by zero"),
+        (OperationError, ValueError, "Operation failed"),
+        (ValidationError, ValueError, "Invalid input"),
+        (HistoryDataError, ValueError, "Invalid CSV"),
+        (HistoryFileError, OSError, "Cannot save CSV"),
     ],
 )
 def test_calculator_exceptions_preserve_messages_and_standard_bases(
@@ -24,3 +32,9 @@ def test_calculator_exceptions_preserve_messages_and_standard_bases(
 
     assert isinstance(exception, base_type)
     assert str(exception) == message
+
+
+def test_specific_exceptions_extend_their_category_errors():
+    assert isinstance(InvalidOperationError("bad operation"), OperationError)
+    assert isinstance(InvalidNumberError("bad number"), ValidationError)
+    assert isinstance(InvalidExpressionError("bad expression"), ValidationError)

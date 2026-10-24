@@ -17,6 +17,7 @@ from app.operations import (
     PowerStrategy,
     RootStrategy,
 )
+from app import logger as app_logger
 
 
 def test_calculator_facade_executes_and_tracks_successful_calculations():
@@ -51,6 +52,43 @@ def test_undo_redo_restore_history_and_new_calculation_discards_redo():
     calculator.calculate(8, "-", 1)
     assert calculator.redo() is False
     assert [item.operation for item in calculator.history] == ["add", "subtract"]
+
+
+def test_multiple_undo_redo_steps_restore_each_history_snapshot():
+    calculator = Calculator()
+    calculator.calculate(2, "+", 3)
+    calculator.calculate(4, "*", 5)
+    calculator.calculate(9, "-", 1)
+
+    assert calculator.undo() is True
+    assert [item.operation for item in calculator.history] == ["add", "multiply"]
+    assert calculator.undo() is True
+    assert [item.operation for item in calculator.history] == ["add"]
+    assert calculator.undo() is True
+    assert calculator.history == ()
+    assert calculator.undo() is False
+
+    assert calculator.redo() is True
+    assert [item.operation for item in calculator.history] == ["add"]
+    assert calculator.redo() is True
+    assert [item.operation for item in calculator.history] == ["add", "multiply"]
+    assert calculator.redo() is True
+    assert [item.operation for item in calculator.history] == [
+        "add",
+        "multiply",
+        "subtract",
+    ]
+    assert calculator.redo() is False
+
+
+def test_calculator_applies_history_limit_and_result_precision():
+    calculator = Calculator(max_history_size=2, precision=2)
+
+    assert calculator.calculate(1, "/", 3) == 0.33
+    calculator.calculate(2, "+", 3)
+    calculator.calculate(4, "+", 5)
+
+    assert [item.first_number for item in calculator.history] == [2, 4]
 
 
 def test_clear_history_can_be_undone_and_redone():
@@ -134,10 +172,59 @@ def test_observers_can_be_added_and_removed():
 def test_logging_observer_logs_calculation(caplog):
     calculator = Calculator(observers=(LoggingObserver(),))
 
-    with caplog.at_level(logging.INFO, logger="app.calculator_observers"):
+    with caplog.at_level(logging.INFO, logger="app.calculator"):
         calculator.calculate(3, "*", 4)
 
-    assert "3 * 4 = 12" in caplog.text
+    assert "Calculation multiply: 3 * 4 = 12" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("operation", "first_number", "second_number"),
+    [
+        ("power", 2, 3),
+        ("root", 27, 3),
+        ("modulus", 10, 3),
+        ("integer_division", 10, 3),
+        ("percentage", 25, 100),
+        ("absolute_difference", 10, 3),
+    ],
+)
+def test_logging_observer_logs_each_additional_operation(
+    caplog, operation, first_number, second_number
+):
+    calculator = Calculator(observers=(LoggingObserver(),))
+
+    with caplog.at_level(logging.INFO, logger="app.calculator"):
+        calculator.calculate(first_number, operation, second_number)
+
+    assert f"Calculation {operation}:" in caplog.text
+
+
+def test_logging_observer_writes_calculation_details_to_file(tmp_path):
+    log_file = tmp_path / "calculator.log"
+    app_logger.configure_logging("INFO", log_file)
+    try:
+        first_handler = app_logger._file_handler
+        app_logger.configure_logging("DEBUG", log_file)
+        assert app_logger._file_handler is first_handler
+
+        replacement_log_file = tmp_path / "replacement.log"
+        app_logger.configure_logging("INFO", replacement_log_file)
+        assert app_logger._file_handler is not first_handler
+
+        Calculator(observers=(LoggingObserver(),)).calculate(3, "*", 4)
+
+        assert first_handler is not None
+        assert first_handler.stream is None
+        log_contents = replacement_log_file.read_text(encoding="utf-8")
+        assert "multiply: 3 * 4 = 12" in log_contents
+    finally:
+        logger = logging.getLogger("app.calculator")
+        if app_logger._file_handler is not None:
+            logger.removeHandler(app_logger._file_handler)
+            app_logger._file_handler.close()
+            app_logger._file_handler = None
+            app_logger._file_encoding = None
 
 
 def test_autosave_observer_writes_calculations_and_tracks_undo_redo(tmp_path):
