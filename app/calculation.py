@@ -1,6 +1,7 @@
 """Calculation objects and calculation helpers."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from app.calculator_config import (
     INVALID_OPERATION_MESSAGE,
@@ -18,6 +19,9 @@ class Calculation:
     first_number: float
     operation: str
     second_number: float
+    timestamp: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
 
     def calculate(self) -> float:
         """Execute the stored operation and return its numeric result."""

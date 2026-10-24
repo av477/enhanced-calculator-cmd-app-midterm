@@ -86,6 +86,39 @@ def test_history_saves_and_loads_csv(tmp_path):
     assert loaded.get_all() == history.get_all()
 
 
+def test_saved_csv_includes_results_and_timestamps(tmp_path):
+    calculation = CalculationFactory.create_calculation(2, "^", 3)
+    history = CalculationHistory([calculation])
+    file_path = tmp_path / "history.csv"
+
+    history.save_csv(file_path)
+    dataframe = pd.read_csv(file_path)
+
+    assert list(dataframe.columns) == [
+        "operation",
+        "first_number",
+        "second_number",
+        "result",
+        "timestamp",
+    ]
+    assert dataframe.loc[0, "result"] == 8
+    assert dataframe.loc[0, "timestamp"] == calculation.timestamp.isoformat()
+    assert CalculationHistory.from_csv(file_path).get_all() == (calculation,)
+
+
+def test_history_loads_legacy_csv_without_result_or_timestamp(tmp_path):
+    file_path = tmp_path / "legacy.csv"
+    file_path.write_text(
+        "first_number,operation,second_number\n2,power,3\n",
+        encoding="utf-8",
+    )
+
+    calculation = CalculationHistory.from_csv(file_path).get_all()[0]
+
+    assert calculation.calculate() == 8
+    assert calculation.timestamp.tzinfo is not None
+
+
 def test_history_uses_configured_encoding_and_limit_for_csv(tmp_path):
     history = CalculationHistory(
         [
@@ -113,6 +146,30 @@ def test_history_uses_configured_encoding_and_limit_for_csv(tmp_path):
         ("first_number,operation,second_number\nnan,add,3\n", "non-finite"),
         ("first_number,operation,second_number\nbad,add,3\n", "non-numeric"),
         ("first_number,operation,second_number\n2,invalid,3\n", "invalid operation"),
+        (
+            "first_number,operation,second_number,result\n2,add,3,wrong\n",
+            "non-numeric result",
+        ),
+        (
+            "first_number,operation,second_number,result\n2,add,3,inf\n",
+            "non-finite result",
+        ),
+        (
+            "first_number,operation,second_number,timestamp\n2,add,3,not-a-date\n",
+            "invalid timestamp",
+        ),
+        (
+            "first_number,operation,second_number,timestamp\n2,add,3,\n",
+            "empty timestamps",
+        ),
+        (
+            "first_number,operation,second_number,result\n2,add,3,6\n",
+            "does not match",
+        ),
+        (
+            "first_number,operation,second_number\n-2,power,0.5\n",
+            "cannot be evaluated",
+        ),
     ],
 )
 def test_history_rejects_invalid_csv(tmp_path, contents, message):

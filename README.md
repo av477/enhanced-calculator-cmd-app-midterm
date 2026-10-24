@@ -154,8 +154,11 @@ load) are saved automatically. Disabling auto-save leaves manual `save` and
 file with its operation, operands, and result. Invalid settings are reported
 before the REPL starts.
 
-CSV history stores the first operand, canonical operation name, and second
-operand. Results are recalculated when history is displayed.
+CSV history stores the canonical operation, both operands, the calculated
+result, and an ISO-8601 UTC timestamp. Loading validates result values and
+timestamps and reconstructs calculation records with their original
+timestamps. Legacy CSV files containing only operation and operands remain
+loadable; their results are calculated and timestamps are assigned on load.
 
 ## Python API
 
