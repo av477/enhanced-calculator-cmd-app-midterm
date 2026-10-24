@@ -7,6 +7,7 @@ from typing import Protocol
 
 from app.calculation import Calculation
 from app.history import CalculationHistory
+from app.logger import get_logger
 
 
 @dataclass(frozen=True)
@@ -30,12 +31,12 @@ class LoggingObserver:
     """Log calculation, undo, and redo events through Python logging."""
 
     def __init__(self, logger: logging.Logger | None = None) -> None:
-        self._logger = logger or logging.getLogger(__name__)
+        self._logger = logger or get_logger()
 
     def update(self, event: CalculationEvent) -> None:
         if event.calculation is not None:
             self._logger.info(
-                "%s: %s %s %s = %s",
+                "Calculation %s: %s %s %s = %s",
                 event.calculation.operation,
                 event.calculation.first_number,
                 event.calculation.symbol,
@@ -43,7 +44,11 @@ class LoggingObserver:
                 event.result,
             )
         else:
-            self._logger.info("Calculator history action: %s", event.action)
+            self._logger.info(
+                "Calculator history action: %s (%d entries)",
+                event.action,
+                len(event.history),
+            )
 
 
 class AutoSaveObserver:

@@ -172,10 +172,32 @@ def test_observers_can_be_added_and_removed():
 def test_logging_observer_logs_calculation(caplog):
     calculator = Calculator(observers=(LoggingObserver(),))
 
-    with caplog.at_level(logging.INFO, logger="app.calculator_observers"):
+    with caplog.at_level(logging.INFO, logger="app.calculator"):
         calculator.calculate(3, "*", 4)
 
-    assert "multiply: 3 * 4 = 12" in caplog.text
+    assert "Calculation multiply: 3 * 4 = 12" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("operation", "first_number", "second_number"),
+    [
+        ("power", 2, 3),
+        ("root", 27, 3),
+        ("modulus", 10, 3),
+        ("integer_division", 10, 3),
+        ("percentage", 25, 100),
+        ("absolute_difference", 10, 3),
+    ],
+)
+def test_logging_observer_logs_each_additional_operation(
+    caplog, operation, first_number, second_number
+):
+    calculator = Calculator(observers=(LoggingObserver(),))
+
+    with caplog.at_level(logging.INFO, logger="app.calculator"):
+        calculator.calculate(first_number, operation, second_number)
+
+    assert f"Calculation {operation}:" in caplog.text
 
 
 def test_logging_observer_writes_calculation_details_to_file(tmp_path):
@@ -197,7 +219,7 @@ def test_logging_observer_writes_calculation_details_to_file(tmp_path):
         log_contents = replacement_log_file.read_text(encoding="utf-8")
         assert "multiply: 3 * 4 = 12" in log_contents
     finally:
-        logger = logging.getLogger("app.calculator_observers")
+        logger = logging.getLogger("app.calculator")
         if app_logger._file_handler is not None:
             logger.removeHandler(app_logger._file_handler)
             app_logger._file_handler.close()

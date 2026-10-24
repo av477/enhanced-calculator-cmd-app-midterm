@@ -3,9 +3,14 @@
 import logging
 from pathlib import Path
 
-_LOGGER_NAME = "app.calculator_observers"
+_LOGGER_NAME = "app.calculator"
 _file_handler: logging.FileHandler | None = None
 _file_encoding: str | None = None
+
+
+def get_logger() -> logging.Logger:
+    """Return the shared logger used for calculator application events."""
+    return logging.getLogger(_LOGGER_NAME)
 
 
 def configure_logging(
@@ -16,7 +21,7 @@ def configure_logging(
     """Write calculator observer messages to the configured log file."""
     global _file_encoding, _file_handler
 
-    logger = logging.getLogger(_LOGGER_NAME)
+    logger = get_logger()
     level = getattr(logging, log_level)
     logger.setLevel(level)
 

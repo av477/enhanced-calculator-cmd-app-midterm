@@ -30,7 +30,7 @@ def isolate_history_file(monkeypatch, tmp_path):
     from app import logger as app_logger
 
     if app_logger._file_handler is not None:
-        logger = logging.getLogger("app.calculator_observers")
+        logger = logging.getLogger("app.calculator")
         logger.removeHandler(app_logger._file_handler)
         app_logger._file_handler.close()
         app_logger._file_handler = None
@@ -56,7 +56,9 @@ def test_run_interactive_handles_valid_and_invalid_operations(
     )
     log_contents = (tmp_path / "calculator.log").read_text(encoding="utf-8")
     assert "add: 5.0 + 3.0 = 8.0" in log_contents
-    assert "divide" not in log_contents
+    assert "Calculation divide:" not in log_contents
+    assert "WARNING Calculation failed: Cannot divide by zero." in log_contents
+    assert "INFO Calculator session ended" in log_contents
 
 
 def test_run_interactive_applies_configured_limits_and_directories(
@@ -186,6 +188,64 @@ def test_run_interactive_handles_invalid_saved_history(monkeypatch, capsys, tmp_
     run_interactive(config=config)
 
     assert "Unable to load calculator history" in capsys.readouterr().out
+    assert "ERROR Unable to load calculator history:" in (
+        tmp_path / "calculator.log"
+    ).read_text(encoding="utf-8")
+
+
+def test_run_interactive_logs_input_and_operation_errors(monkeypatch, capsys, tmp_path):
+    responses = iter(["sqrt", "add", "not-a-number", "quit"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(responses))
+
+    from app.calculator_repl import run_interactive
+
+    run_interactive()
+
+    output = capsys.readouterr().out
+    assert "Invalid operation" in output
+    assert "Please enter a valid number" in output
+    log_contents = (tmp_path / "calculator.log").read_text(encoding="utf-8")
+    assert "WARNING Operation failed: Invalid operation" in log_contents
+    assert "WARNING Input validation failed:" in log_contents
+
+
+def test_run_interactive_logs_unexpected_value_errors(monkeypatch, capsys, tmp_path):
+    from app.calculator import Calculator
+    from app.calculator_repl import run_interactive
+
+    def fail_calculation(*_args):
+        raise ValueError("unexpected calculation error")
+
+    calculator = Calculator()
+    monkeypatch.setattr(calculator, "calculate", fail_calculation)
+    responses = iter(["add", "1", "2", "exit"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(responses))
+
+    run_interactive(calculator=calculator)
+
+    assert "Error: unexpected calculation error" in capsys.readouterr().out
+    log_contents = (tmp_path / "calculator.log").read_text(encoding="utf-8")
+    assert "ERROR Calculation or command failed: unexpected calculation error" in (
+        log_contents
+    )
+
+
+def test_run_interactive_logs_filesystem_errors(monkeypatch, capsys, tmp_path):
+    from app.calculator_repl import run_interactive
+    from app.history import CalculationHistory
+
+    def fail_save(*_args, **_kwargs):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr(CalculationHistory, "save_csv", fail_save)
+    responses = iter(["save", "exit"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(responses))
+
+    run_interactive()
+
+    assert "History file error: disk unavailable" in capsys.readouterr().out
+    log_contents = (tmp_path / "calculator.log").read_text(encoding="utf-8")
+    assert "ERROR History file operation failed: disk unavailable" in log_contents
 
 
 def test_run_interactive_can_disable_csv_autosaving(monkeypatch, capsys, tmp_path):

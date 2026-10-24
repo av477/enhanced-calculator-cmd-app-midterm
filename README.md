@@ -194,6 +194,10 @@ calculator.redo()
 - **Observer:** `Calculator` broadcasts state changes to registered observers.
   `LoggingObserver` records calculation details, and `AutoSaveObserver`
   automatically persists CSV history.
+- **Logging:** The CLI writes to `CALCULATOR_LOG_FILE` (or the configured
+  default log path). Successful calculations and session/history events are
+  logged at INFO, invalid input and failed operations at WARNING, and history
+  file/data failures at ERROR.
 - **Memento:** immutable `CalculatorMemento` snapshots provide undo and redo.
 - **Facade:** `Calculator` coordinates operations, history, observers, and
   state restoration.

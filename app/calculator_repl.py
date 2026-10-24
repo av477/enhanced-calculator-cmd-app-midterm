@@ -14,10 +14,16 @@ from app.calculator_config import (
 )
 from app.calculator_observers import AutoSaveObserver, LoggingObserver
 from app.config import AppConfig, ConfigurationError
-from app.exceptions import HistoryDataError, InvalidOperationError
+from app.exceptions import (
+    HistoryDataError,
+    HistoryFileError,
+    InvalidOperationError,
+    OperationError,
+    ValidationError,
+)
 from app.history import CalculationHistory
 from app.input_validators import parse_number
-from app.logger import configure_logging
+from app.logger import configure_logging, get_logger
 
 init(autoreset=True)
 
@@ -98,21 +104,8 @@ def run_interactive(
     """Run the calculator's read-evaluate-print loop."""
     try:
         config = config or AppConfig.from_environment()
-        if calculator is None:
-            initial_history = (
-                CalculationHistory.from_csv(
-                    config.history_csv_path,
-                    encoding=config.default_encoding,
-                    max_size=config.max_history_size,
-                ).get_all()
-                if config.history_csv_path.exists()
-                else ()
-            )
     except ConfigurationError as exc:
         print(f"Configuration error: {exc}")
-        return
-    except (OSError, ValueError) as exc:
-        print(f"Unable to load calculator history: {exc}")
         return
 
     try:
@@ -125,7 +118,25 @@ def run_interactive(
         print(f"Unable to configure calculator logging: {exc}")
         return
 
+    logger = get_logger()
+    logger.info("Starting calculator")
+
     if calculator is None:
+        try:
+            initial_history = (
+                CalculationHistory.from_csv(
+                    config.history_csv_path,
+                    encoding=config.default_encoding,
+                    max_size=config.max_history_size,
+                ).get_all()
+                if config.history_csv_path.exists()
+                else ()
+            )
+        except (HistoryDataError, HistoryFileError, ValueError, OSError) as exc:
+            logger.error("Unable to load calculator history: %s", exc)
+            print(f"Unable to load calculator history: {exc}")
+            return
+
         observers = [LoggingObserver()]
         if config.autosave_history:
             observers.append(
@@ -165,6 +176,7 @@ def run_interactive(
             command = operation.lower()
 
             if command in {"quit", "exit", "q"}:
+                logger.info("Calculator session ended")
                 print("Goodbye!")
                 break
             if command == "help":
@@ -233,15 +245,29 @@ def run_interactive(
             result = calculator.calculate(first_number, command, second_number)
             print(f"Result: {result}")
         except (EOFError, KeyboardInterrupt):
+            logger.info("Calculator session interrupted")
             print("\nGoodbye!")
             break
         except HistoryDataError as exc:
+            logger.error("History data error: %s", exc)
             print(f"History data error: {exc}")
+        except HistoryFileError as exc:
+            logger.error("History file error: %s", exc)
+            print(f"History file error: {exc}")
+        except ValidationError as exc:
+            logger.warning("Input validation failed: %s", exc)
+            print(f"Error: {exc}")
+        except OperationError as exc:
+            logger.warning("Operation failed: %s", exc)
+            print(f"Error: {exc}")
         except ValueError as exc:
+            logger.error("Calculation or command failed: %s", exc)
             print(f"Error: {exc}")
         except ZeroDivisionError as exc:
+            logger.warning("Calculation failed: %s", exc)
             print(f"Error: {exc}")
         except OSError as exc:
+            logger.error("History file operation failed: %s", exc)
             print(f"History file error: {exc}")
 
 
