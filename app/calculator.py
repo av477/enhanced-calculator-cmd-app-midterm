@@ -15,11 +15,14 @@ class Calculator:
         self,
         observers: Iterable[CalculationObserver] = (),
         initial_history: Iterable[Calculation] = (),
+        max_history_size: int | None = None,
+        precision: int | None = None,
     ) -> None:
-        self._history = CalculationHistory()
+        self._history = CalculationHistory(max_size=max_history_size)
         self._observers = list(observers)
         self._undo_stack: list[CalculatorMemento] = []
         self._redo_stack: list[CalculatorMemento] = []
+        self._precision = precision
         for calculation in initial_history:
             self._undo_stack.append(self._history.create_memento())
             self._history.add(calculation)
@@ -49,6 +52,8 @@ class Calculator:
             first_number, operation, second_number
         )
         result = calculation.calculate()
+        if self._precision is not None:
+            result = round(result, self._precision)
 
         self._undo_stack.append(self._history.create_memento())
         self._redo_stack.clear()
