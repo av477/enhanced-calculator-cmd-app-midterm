@@ -112,13 +112,36 @@ def test_run_interactive_help_history_and_exit(monkeypatch, capsys):
     assert "Goodbye!" in captured.out
 
 
+def test_colorize_adds_requested_color_and_reset_codes():
+    from colorama import Fore, Style
+
+    from app.calculator_repl import _colorize
+
+    assert _colorize("Result: 5", Fore.GREEN) == (
+        f"{Fore.GREEN}Result: 5{Style.RESET_ALL}"
+    )
+
+
+def test_help_menu_decorator_includes_new_registered_operations(monkeypatch, capsys):
+    from app.calculator_config import OPERATION_ALIASES
+    from app.calculator_repl import _print_help
+
+    monkeypatch.setitem(OPERATION_ALIASES, "cube", ("cube", "cub", "**"))
+
+    _print_help()
+
+    output = capsys.readouterr().out
+    assert "cube (**)" in output
+    assert "cub" in output
+
+
 def test_print_history_without_precision_keeps_full_result(capsys):
     from app.calculation import CalculationFactory
-    from app.calculator_repl import _print_history
+    from app.calculator_commands import format_history
 
     calculation = CalculationFactory.create_calculation(1, "/", 3)
 
-    _print_history((calculation,))
+    print(format_history((calculation,)))
 
     assert "1. 1 / 3 = 0.3333333333333333" in capsys.readouterr().out
 

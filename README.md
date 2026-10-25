@@ -14,6 +14,9 @@ Factory, Observer, Memento, and Facade patterns.
 - `help`, `history`, `clear`, `undo`, `redo`, `save`, `load`, and exit commands
 - Input validation and clear errors for invalid input and unsupported results
 - File-based calculation logging and observer-driven CSV auto-save
+- Decorator-generated help that reflects the shared operation registry
+- Color-coded prompts and REPL feedback using Colorama
+- Command objects for calculations, history operations, and queued execution
 - Pytest suite with statement and branch coverage measured in CI; CI requires
   at least 90% total coverage
 
@@ -215,6 +218,20 @@ calculator.undo()
 calculator.redo()
 ```
 
+Commands can also be queued and executed in order:
+
+```python
+from app.calculator import Calculator
+from app.calculator_commands import CalculateCommand, CommandInvoker
+
+calculator = Calculator()
+invoker = CommandInvoker()
+invoker.enqueue(CalculateCommand(calculator, 2, "power", 3))
+invoker.enqueue(CalculateCommand(calculator, 10, "modulus", 4))
+for message in invoker.execute_all():
+    print(message)
+```
+
 ## Design and project layout
 
 - **Strategy and Factory:** `OperationFactory` selects an operation strategy;
@@ -222,6 +239,14 @@ calculator.redo()
 - **Observer:** `Calculator` broadcasts state changes to registered observers.
   `LoggingObserver` records calculation details, and `AutoSaveObserver`
   automatically persists CSV history.
+- **Decorator:** `OperationHelpDecorator` extends the command help renderer
+  with operation names, symbols, and aliases from `OPERATION_ALIASES`; adding
+  an operation to the shared registry updates the help menu automatically.
+- **Command:** `calculator_commands.py` encapsulates calculations and history
+  actions in command objects. `CommandInvoker` supports immediate execution
+  and queuing commands for ordered execution.
+- **Color output:** Colorama highlights prompts, operation choices, successful
+  results, and errors in the REPL.
 - **Logging:** The CLI writes to `CALCULATOR_LOG_FILE` (or the configured
   default log path). Successful calculations and session/history events are
   logged at INFO, invalid input and failed operations at WARNING, and history
@@ -234,6 +259,7 @@ calculator.redo()
 app/
     __init__.py
     calculator.py
+    calculator_commands.py
     calculation.py
     calculator_config.py
     calculator_memento.py
