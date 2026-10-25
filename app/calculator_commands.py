@@ -1,7 +1,7 @@
 """Command objects for calculator actions and their queued execution."""
 
 from collections import deque
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 import sys
 from typing import Protocol
@@ -41,6 +41,69 @@ class CommandInvoker:
     def execute_all(self) -> tuple[str, ...]:
         """Execute and return results from all queued commands in order."""
         return tuple(self.execute_next() for _ in range(len(self._queue)))
+
+
+CommandFactory = Callable[..., Command]
+
+
+class CommandRegistry:
+    """Map REPL command names and aliases to command factories."""
+
+    def __init__(self) -> None:
+        self._factories: dict[str, CommandFactory] = {}
+        self._aliases: dict[str, str] = {}
+
+    def register(
+        self,
+        name: str,
+        *aliases: str,
+    ) -> Callable[[CommandFactory], CommandFactory]:
+        """Return a decorator that registers a factory under a name and aliases."""
+
+        def decorator(factory: CommandFactory) -> CommandFactory:
+            self._factories[name] = factory
+            for alias in (name, *aliases):
+                self._aliases[alias.lower()] = name
+            return factory
+
+        return decorator
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        """Return registered command names in registration order."""
+        return tuple(self._factories)
+
+    def resolve(self, alias: str) -> str | None:
+        """Return the command name for an alias, or None when unregistered."""
+        return self._aliases.get(alias.strip().lower())
+
+    def create(self, name: str, *args, **kwargs) -> Command:
+        """Build the command registered under a name or alias."""
+        command_name = self.resolve(name)
+        if command_name is None:
+            raise KeyError(f"Unknown calculator command: {name}")
+        return self._factories[command_name](*args, **kwargs)
+
+
+class HelpCommand:
+    """Render the help menu supplied by a help renderer."""
+
+    def __init__(self, render_help: Callable[[], str]) -> None:
+        self._render_help = render_help
+
+    def execute(self) -> str:
+        """Return the rendered help menu."""
+        return self._render_help()
+
+
+class ExitCommand:
+    """Request that the REPL session end."""
+
+    ends_session = True
+
+    def execute(self) -> str:
+        """Return the farewell message."""
+        return "Goodbye!"
 
 
 class CalculateCommand:

@@ -20,8 +20,21 @@ VALID_OPERATIONS = {
     for name, aliases in OPERATION_ALIASES.items()
     for alias in aliases
 }
-INVALID_OPERATION_MESSAGE = (
-    "Invalid operation. Please choose one of: add (+), subtract (-), "
-    "multiply (*), divide (/), power (^), root (nthroot), modulus (%), "
-    "integer_division (//), percentage (pct), or absolute_difference (abs)."
-)
+
+
+def _ascii_hint(aliases: tuple[str, ...]) -> str:
+    """Return the last alias that every console encoding can display."""
+    return next(alias for alias in reversed(aliases) if alias.isascii())
+
+
+def build_invalid_operation_message() -> str:
+    """Build the invalid-operation message from the operation registry."""
+    choices = [
+        f"{name} ({_ascii_hint(aliases)})"
+        for name, aliases in OPERATION_ALIASES.items()
+    ]
+    listed = ", ".join(choices[:-1]) + f", or {choices[-1]}"
+    return f"Invalid operation. Please choose one of: {listed}."
+
+
+INVALID_OPERATION_MESSAGE = build_invalid_operation_message()

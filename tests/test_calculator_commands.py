@@ -8,6 +8,9 @@ from app.calculator_commands import (
     CalculateCommand,
     ClearHistoryCommand,
     CommandInvoker,
+    CommandRegistry,
+    ExitCommand,
+    HelpCommand,
     HistoryCommand,
     LoadHistoryCommand,
     RedoCommand,
@@ -97,3 +100,44 @@ def test_save_and_load_commands_round_trip_history(tmp_path):
         f"History loaded from {file_path}."
     )
     assert restored.history[0].calculate() == 8
+
+
+def test_command_registry_decorator_registers_factories_and_aliases():
+    registry = CommandRegistry()
+
+    @registry.register("exit", "quit", "Q")
+    def make_exit():
+        return ExitCommand()
+
+    assert make_exit is registry._factories["exit"]
+    assert registry.names == ("exit",)
+    assert registry.resolve("  QUIT ") == "exit"
+    assert registry.resolve("q") == "exit"
+    assert isinstance(registry.create("quit"), ExitCommand)
+
+
+def test_command_registry_passes_arguments_to_factories():
+    registry = CommandRegistry()
+    registry.register("undo")(UndoCommand)
+    calculator = Calculator()
+
+    assert registry.create("undo", calculator).execute() == "Nothing to undo."
+
+
+def test_command_registry_rejects_unknown_commands():
+    registry = CommandRegistry()
+
+    assert registry.resolve("missing") is None
+    with pytest.raises(KeyError, match="Unknown calculator command: missing"):
+        registry.create("missing")
+
+
+def test_help_command_returns_rendered_help():
+    assert HelpCommand(lambda: "Commands: help").execute() == "Commands: help"
+
+
+def test_exit_command_ends_session():
+    command = ExitCommand()
+
+    assert command.ends_session is True
+    assert command.execute() == "Goodbye!"

@@ -1,7 +1,7 @@
 """Enhanced Calculator command loop and CLI entry point."""
 
 import sys
-from collections.abc import Callable
+from typing import Protocol
 
 from colorama import Fore, Style, init
 
@@ -9,7 +9,11 @@ from app.calculator import Calculator
 from app.calculator_commands import (
     CalculateCommand,
     ClearHistoryCommand,
+    Command,
     CommandInvoker,
+    CommandRegistry,
+    ExitCommand,
+    HelpCommand,
     HistoryCommand,
     LoadHistoryCommand,
     RedoCommand,
@@ -17,7 +21,7 @@ from app.calculator_commands import (
     UndoCommand,
 )
 from app.calculator_config import (
-    INVALID_OPERATION_MESSAGE,
+    build_invalid_operation_message,
     OPERATION_ALIASES,
     VALID_OPERATIONS,
 )
@@ -48,11 +52,23 @@ OPERATION_COLORS = {
     "percentage": Fore.MAGENTA,
     "absolute_difference": Fore.RED,
 }
+COMMAND_COLORS = {
+    "help": Fore.WHITE,
+    "history": Fore.WHITE,
+}
+NOTICE_PREFIXES = ("Nothing to", "No calculations")
 
 
 def _colorize(message: str, color: str) -> str:
     """Wrap one console message in a Colorama color and reset sequence."""
     return f"{color}{message}{Style.RESET_ALL}"
+
+
+def _result_color(command_name: str, result: str) -> str:
+    """Pick the color for a command result: notices are yellow."""
+    if result.startswith(NOTICE_PREFIXES):
+        return Fore.YELLOW
+    return COMMAND_COLORS.get(command_name, Fore.GREEN)
 
 
 def _display_symbol(operation_name: str) -> str:
@@ -66,23 +82,56 @@ def _display_symbol(operation_name: str) -> str:
     return symbol
 
 
-class OperationHelpDecorator:
-    """Extend command help with operations from the shared operation registry."""
+REPL_COMMANDS = CommandRegistry()
 
-    def __init__(self, render_commands: Callable[[], None]) -> None:
-        self._render_commands = render_commands
 
-    def __call__(self) -> None:
-        self._render_commands()
-        print(
-            "Operations: "
+class HelpComponent(Protocol):
+    """Render one section of the help menu."""
+
+    def render(self) -> str:
+        """Return help text."""
+
+
+class CommandHelp:
+    """Base help component listing every registered REPL command."""
+
+    def __init__(self, registry: CommandRegistry) -> None:
+        self._registry = registry
+
+    def render(self) -> str:
+        return "Commands: " + ", ".join(self._registry.names)
+
+
+class HelpDecorator:
+    """Base decorator that forwards rendering to the wrapped help component."""
+
+    def __init__(self, component: HelpComponent) -> None:
+        self._component = component
+
+    def render(self) -> str:
+        return self._component.render()
+
+
+class OperationHelpDecorator(HelpDecorator):
+    """Extend help with operations from the shared operation registry."""
+
+    def render(self) -> str:
+        return (
+            super().render()
+            + "\nOperations: "
             + ", ".join(
-                f"{name} ({_display_symbol(name)})"
-                for name in OPERATION_ALIASES
+                f"{name} ({_display_symbol(name)})" for name in OPERATION_ALIASES
             )
         )
-        print(
-            "Aliases: "
+
+
+class AliasHelpDecorator(HelpDecorator):
+    """Extend help with the word aliases of every registered operation."""
+
+    def render(self) -> str:
+        return (
+            super().render()
+            + "\nAliases: "
             + ", ".join(
                 alias
                 for aliases in OPERATION_ALIASES.values()
@@ -91,10 +140,91 @@ class OperationHelpDecorator:
         )
 
 
-@OperationHelpDecorator
+HELP_MENU: HelpComponent = AliasHelpDecorator(
+    OperationHelpDecorator(CommandHelp(REPL_COMMANDS))
+)
+
+
 def _print_help() -> None:
-    """Display non-calculation commands; the decorator adds operation help."""
-    print("Commands: help, history, clear, undo, redo, save, load, exit")
+    """Display the decorated help menu."""
+    print(HELP_MENU.render())
+
+
+@REPL_COMMANDS.register("help")
+def _help_command(_calculator: Calculator, _config: AppConfig) -> Command:
+    return HelpCommand(HELP_MENU.render)
+
+
+@REPL_COMMANDS.register("history")
+def _history_command(calculator: Calculator, config: AppConfig) -> Command:
+    return HistoryCommand(calculator, config.precision)
+
+
+@REPL_COMMANDS.register("clear")
+def _clear_command(calculator: Calculator, _config: AppConfig) -> Command:
+    return ClearHistoryCommand(calculator)
+
+
+@REPL_COMMANDS.register("undo")
+def _undo_command(calculator: Calculator, _config: AppConfig) -> Command:
+    return UndoCommand(calculator)
+
+
+@REPL_COMMANDS.register("redo")
+def _redo_command(calculator: Calculator, _config: AppConfig) -> Command:
+    return RedoCommand(calculator)
+
+
+@REPL_COMMANDS.register("save")
+def _save_command(calculator: Calculator, config: AppConfig) -> Command:
+    return SaveHistoryCommand(
+        calculator,
+        config.history_csv_path,
+        encoding=config.default_encoding,
+    )
+
+
+@REPL_COMMANDS.register("load")
+def _load_command(calculator: Calculator, config: AppConfig) -> Command:
+    return LoadHistoryCommand(
+        calculator,
+        config.history_csv_path,
+        encoding=config.default_encoding,
+        max_history_size=config.max_history_size,
+    )
+
+
+@REPL_COMMANDS.register("exit", "quit", "q")
+def _exit_command(_calculator: Calculator, _config: AppConfig) -> Command:
+    return ExitCommand()
+
+
+def _read_calculation(
+    calculator: Calculator,
+    config: AppConfig,
+    operation: str,
+) -> Command:
+    """Prompt for operands and build a calculation command."""
+    # LBYL: reject an unknown operation before requesting operands.
+    if operation not in VALID_OPERATIONS:
+        raise InvalidOperationError(build_invalid_operation_message())
+
+    is_root = VALID_OPERATIONS[operation] == "root"
+    first_prompt = (
+        "Enter the number to take a root of: " if is_root else "Enter the first number: "
+    )
+    second_prompt = "Enter the root degree: " if is_root else "Enter the second number: "
+    first_number = parse_number(
+        input(_colorize(first_prompt, Fore.CYAN)).strip(),
+        "first",
+        maximum=config.max_input_value,
+    )
+    second_number = parse_number(
+        input(_colorize(second_prompt, Fore.CYAN)).strip(),
+        "second",
+        maximum=config.max_input_value,
+    )
+    return CalculateCommand(calculator, first_number, operation, second_number)
 
 
 def run_interactive(
@@ -171,103 +301,26 @@ def run_interactive(
             Fore.CYAN,
         )
     )
-    history_path = config.history_csv_path
     invoker = CommandInvoker()
 
     while True:
         try:
-            operation = input(_colorize("Choose an operation: ", Fore.CYAN)).strip()
-            command = operation.lower()
+            user_input = input(_colorize("Choose an operation: ", Fore.CYAN))
+            command_name = REPL_COMMANDS.resolve(user_input)
 
-            if command in {"quit", "exit", "q"}:
+            if command_name is None:
+                command = _read_calculation(
+                    calculator, config, user_input.strip().lower()
+                )
+            else:
+                command = REPL_COMMANDS.create(command_name, calculator, config)
+
+            result = invoker.execute(command)
+            print(_colorize(result, _result_color(command_name or "calculate", result)))
+
+            if getattr(command, "ends_session", False):
                 logger.info("Calculator session ended")
-                print(_colorize("Goodbye!", Fore.GREEN))
                 break
-            if command == "help":
-                _print_help()
-                continue
-            if command == "history":
-                print(
-                    invoker.execute(HistoryCommand(calculator, config.precision))
-                )
-                continue
-            if command == "clear":
-                print(
-                    _colorize(
-                        invoker.execute(ClearHistoryCommand(calculator)),
-                        Fore.GREEN,
-                    )
-                )
-                continue
-            if command == "undo":
-                result = invoker.execute(UndoCommand(calculator))
-                color = Fore.GREEN if result.startswith("Undid") else Fore.YELLOW
-                print(_colorize(result, color))
-                continue
-            if command == "redo":
-                result = invoker.execute(RedoCommand(calculator))
-                color = Fore.GREEN if result.startswith("Redid") else Fore.YELLOW
-                print(_colorize(result, color))
-                continue
-            if command == "save":
-                print(
-                    _colorize(
-                        invoker.execute(
-                            SaveHistoryCommand(
-                                calculator,
-                                history_path,
-                                encoding=config.default_encoding,
-                            )
-                        ),
-                        Fore.GREEN,
-                    )
-                )
-                continue
-            if command == "load":
-                print(
-                    _colorize(
-                        invoker.execute(
-                            LoadHistoryCommand(
-                                calculator,
-                                history_path,
-                                encoding=config.default_encoding,
-                                max_history_size=config.max_history_size,
-                            )
-                        ),
-                        Fore.GREEN,
-                    )
-                )
-                continue
-
-            # LBYL: reject an unknown operation before requesting operands.
-            if command not in VALID_OPERATIONS:
-                raise InvalidOperationError(INVALID_OPERATION_MESSAGE)
-
-            is_root = command in {"root", "nthroot", "√"}
-            first_prompt = (
-                "Enter the number to take a root of: "
-                if is_root
-                else "Enter the first number: "
-            )
-            second_prompt = (
-                "Enter the root degree: "
-                if is_root
-                else "Enter the second number: "
-            )
-            first_number = parse_number(
-                input(_colorize(first_prompt, Fore.CYAN)).strip(),
-                "first",
-                maximum=config.max_input_value,
-            )
-            second_number = parse_number(
-                input(_colorize(second_prompt, Fore.CYAN)).strip(),
-                "second",
-                maximum=config.max_input_value,
-            )
-            result = invoker.execute(
-                CalculateCommand(calculator, first_number, command, second_number)
-            )
-            print(_colorize(result, Fore.GREEN))
         except (EOFError, KeyboardInterrupt):
             logger.info("Calculator session interrupted")
             print(_colorize("\nGoodbye!", Fore.GREEN))

@@ -14,9 +14,10 @@ Factory, Observer, Memento, and Facade patterns.
 - `help`, `history`, `clear`, `undo`, `redo`, `save`, `load`, and exit commands
 - Input validation and clear errors for invalid input and unsupported results
 - File-based calculation logging and observer-driven CSV auto-save
-- Decorator-generated help that reflects the shared operation registry
+- Decorator-generated help that reflects the registered commands and operations
 - Color-coded prompts and REPL feedback using Colorama
-- Command objects for calculations, history operations, and queued execution
+- Command objects for every REPL action, dispatched through a command registry
+  and supporting queued execution
 - Pytest suite with statement and branch coverage measured in CI; CI requires
   at least 90% total coverage
 
@@ -24,7 +25,8 @@ Factory, Observer, Memento, and Facade patterns.
 
 - Python 3.11 or newer
 - pip
-- Runtime packages: `colorama`, `pandas`, and `python-dotenv`
+- Runtime packages: `colorama`, `pandas`, and `python-dotenv`, declared in
+  `pyproject.toml` and installed by `pip install -e ".[dev]"`
 
 ## Setup
 
@@ -218,6 +220,23 @@ calculator.undo()
 calculator.redo()
 ```
 
+To add a REPL command, register a factory that builds a command object; it
+then appears in `help` automatically:
+
+```python
+from app.calculator_commands import HelpCommand
+from app.calculator_repl import REPL_COMMANDS
+
+@REPL_COMMANDS.register("about", "info")
+def _about_command(calculator, config):
+    return HelpCommand(lambda: "Enhanced Calculator")
+```
+
+To add an operation, add its strategy to `OperationFactory` in
+`app/operations.py` and its aliases to `OPERATION_ALIASES` in
+`app/calculator_config.py`; help, the startup listing, and error messages pick
+it up automatically.
+
 Commands can also be queued and executed in order:
 
 ```python
@@ -239,14 +258,22 @@ for message in invoker.execute_all():
 - **Observer:** `Calculator` broadcasts state changes to registered observers.
   `LoggingObserver` records calculation details, and `AutoSaveObserver`
   automatically persists CSV history.
-- **Decorator:** `OperationHelpDecorator` extends the command help renderer
-  with operation names, symbols, and aliases from `OPERATION_ALIASES`; adding
-  an operation to the shared registry updates the help menu automatically.
-- **Command:** `calculator_commands.py` encapsulates calculations and history
-  actions in command objects. `CommandInvoker` supports immediate execution
-  and queuing commands for ordered execution.
-- **Color output:** Colorama highlights prompts, operation choices, successful
-  results, and errors in the REPL.
+- **Decorator:** the help menu is a `CommandHelp` component wrapped by
+  `OperationHelpDecorator` and `AliasHelpDecorator`. `CommandHelp` lists the
+  commands in the REPL command registry, and the decorators append operation
+  names, symbols, and aliases read from `OPERATION_ALIASES` each time help is
+  shown. Registering a new command or operation updates `help` (and the
+  invalid-operation message) with no manual edits.
+- **Command:** `calculator_commands.py` encapsulates each request (calculate,
+  help, history, clear, undo, redo, save, load, exit) in a command object.
+  The REPL looks up user input in a `CommandRegistry` (populated with the
+  `@REPL_COMMANDS.register(...)` decorator) instead of an `if`/`elif` chain;
+  any other input is treated as an operation and becomes a `CalculateCommand`.
+  `CommandInvoker` executes commands immediately or queues them for ordered
+  execution.
+- **Color output:** Colorama colors prompts and banners cyan, successful
+  results green, notices such as "Nothing to undo" yellow, and errors red.
+  Each operation has its own color in the startup listing.
 - **Logging:** The CLI writes to `CALCULATOR_LOG_FILE` (or the configured
   default log path). Successful calculations and session/history events are
   logged at INFO, invalid input and failed operations at WARNING, and history

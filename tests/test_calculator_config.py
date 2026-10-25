@@ -5,6 +5,7 @@ from app.calculator_config import (
     OPERATION_ALIASES,
     OPERATION_SYMBOLS,
     VALID_OPERATIONS,
+    build_invalid_operation_message,
 )
 
 
@@ -52,3 +53,12 @@ def test_operation_aliases_are_unique():
 def test_invalid_operation_message_lists_supported_operations():
     for operation in OPERATION_ALIASES:
         assert operation in INVALID_OPERATION_MESSAGE
+
+
+def test_invalid_operation_message_is_built_from_the_registry(monkeypatch):
+    monkeypatch.setitem(OPERATION_ALIASES, "cube", ("cube", "cub", "³"))
+
+    message = build_invalid_operation_message()
+
+    assert message.endswith(", or cube (cub).")
+    assert "root (nthroot)" in message
