@@ -112,13 +112,36 @@ def test_run_interactive_help_history_and_exit(monkeypatch, capsys):
     assert "Goodbye!" in captured.out
 
 
+def test_colorize_adds_requested_color_and_reset_codes():
+    from colorama import Fore, Style
+
+    from app.calculator_repl import _colorize
+
+    assert _colorize("Result: 5", Fore.GREEN) == (
+        f"{Fore.GREEN}Result: 5{Style.RESET_ALL}"
+    )
+
+
+def test_help_menu_decorator_includes_new_registered_operations(monkeypatch, capsys):
+    from app.calculator_config import OPERATION_ALIASES
+    from app.calculator_repl import _print_help
+
+    monkeypatch.setitem(OPERATION_ALIASES, "cube", ("cube", "cub", "**"))
+
+    _print_help()
+
+    output = capsys.readouterr().out
+    assert "cube (**)" in output
+    assert "cub" in output
+
+
 def test_print_history_without_precision_keeps_full_result(capsys):
     from app.calculation import CalculationFactory
-    from app.calculator_repl import _print_history
+    from app.calculator_commands import format_history
 
     calculation = CalculationFactory.create_calculation(1, "/", 3)
 
-    _print_history((calculation,))
+    print(format_history((calculation,)))
 
     assert "1. 1 / 3 = 0.3333333333333333" in capsys.readouterr().out
 
@@ -509,3 +532,65 @@ def test_calculator_repl_module_runs_main(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "Enhanced Calculator" in captured.out
     assert "Goodbye!" in captured.out
+
+
+def test_help_menu_lists_newly_registered_repl_commands(monkeypatch, capsys):
+    from app.calculator_commands import HelpCommand
+    from app.calculator_repl import REPL_COMMANDS, _print_help
+
+    monkeypatch.setattr(REPL_COMMANDS, "_factories", dict(REPL_COMMANDS._factories))
+    monkeypatch.setattr(REPL_COMMANDS, "_aliases", dict(REPL_COMMANDS._aliases))
+    REPL_COMMANDS.register("about")(lambda *_args: HelpCommand(lambda: "About"))
+
+    _print_help()
+
+    assert "Commands: help, history, clear, undo, redo, save, load, exit, about" in (
+        capsys.readouterr().out
+    )
+
+
+def test_help_menu_is_built_from_stacked_decorators():
+    from app.calculator_repl import (
+        HELP_MENU,
+        REPL_COMMANDS,
+        AliasHelpDecorator,
+        CommandHelp,
+        OperationHelpDecorator,
+    )
+
+    assert isinstance(HELP_MENU, AliasHelpDecorator)
+    assert CommandHelp(REPL_COMMANDS).render().startswith("Commands: help")
+    lines = OperationHelpDecorator(CommandHelp(REPL_COMMANDS)).render().splitlines()
+    assert lines[1].startswith("Operations: add (+)")
+    assert len(lines) == 2
+
+
+def test_run_interactive_dispatches_newly_registered_commands(monkeypatch, capsys):
+    from app.calculator_commands import HelpCommand
+    from app.calculator_repl import REPL_COMMANDS, run_interactive
+
+    monkeypatch.setattr(REPL_COMMANDS, "_factories", dict(REPL_COMMANDS._factories))
+    monkeypatch.setattr(REPL_COMMANDS, "_aliases", dict(REPL_COMMANDS._aliases))
+    REPL_COMMANDS.register("about", "info")(
+        lambda *_args: HelpCommand(lambda: "Enhanced Calculator v1")
+    )
+    responses = iter(["INFO", "q"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(responses))
+
+    run_interactive()
+
+    output = capsys.readouterr().out
+    assert "Enhanced Calculator v1" in output
+    assert "Goodbye!" in output
+
+
+def test_result_color_marks_notices_yellow_and_successes_green():
+    from colorama import Fore
+
+    from app.calculator_repl import _result_color
+
+    assert _result_color("undo", "Nothing to undo.") == Fore.YELLOW
+    assert _result_color("history", "No calculations in history.") == Fore.YELLOW
+    assert _result_color("undo", "Undid the last calculation.") == Fore.GREEN
+    assert _result_color("history", "1. 1 + 1 = 2") == Fore.WHITE
+    assert _result_color("calculate", "Result: 2") == Fore.GREEN

@@ -1,15 +1,28 @@
 """Enhanced Calculator command loop and CLI entry point."""
 
 import sys
+from typing import Protocol
 
-from colorama import Fore, init
+from colorama import Fore, Style, init
 
-from app.calculation import Calculation
 from app.calculator import Calculator
+from app.calculator_commands import (
+    CalculateCommand,
+    ClearHistoryCommand,
+    Command,
+    CommandInvoker,
+    CommandRegistry,
+    ExitCommand,
+    HelpCommand,
+    HistoryCommand,
+    LoadHistoryCommand,
+    RedoCommand,
+    SaveHistoryCommand,
+    UndoCommand,
+)
 from app.calculator_config import (
-    INVALID_OPERATION_MESSAGE,
+    build_invalid_operation_message,
     OPERATION_ALIASES,
-    OPERATION_SYMBOLS,
     VALID_OPERATIONS,
 )
 from app.calculator_observers import AutoSaveObserver, LoggingObserver
@@ -39,11 +52,28 @@ OPERATION_COLORS = {
     "percentage": Fore.MAGENTA,
     "absolute_difference": Fore.RED,
 }
+COMMAND_COLORS = {
+    "help": Fore.WHITE,
+    "history": Fore.WHITE,
+}
+NOTICE_PREFIXES = ("Nothing to", "No calculations")
+
+
+def _colorize(message: str, color: str) -> str:
+    """Wrap one console message in a Colorama color and reset sequence."""
+    return f"{color}{message}{Style.RESET_ALL}"
+
+
+def _result_color(command_name: str, result: str) -> str:
+    """Pick the color for a command result: notices are yellow."""
+    if result.startswith(NOTICE_PREFIXES):
+        return Fore.YELLOW
+    return COMMAND_COLORS.get(command_name, Fore.GREEN)
 
 
 def _display_symbol(operation_name: str) -> str:
     """Return an operation symbol supported by the active console encoding."""
-    symbol = OPERATION_SYMBOLS[operation_name]
+    symbol = OPERATION_ALIASES[operation_name][-1]
     encoding = sys.stdout.encoding or "utf-8"
     try:
         symbol.encode(encoding)
@@ -52,49 +82,149 @@ def _display_symbol(operation_name: str) -> str:
     return symbol
 
 
+REPL_COMMANDS = CommandRegistry()
+
+
+class HelpComponent(Protocol):
+    """Render one section of the help menu."""
+
+    def render(self) -> str:
+        """Return help text."""
+
+
+class CommandHelp:
+    """Base help component listing every registered REPL command."""
+
+    def __init__(self, registry: CommandRegistry) -> None:
+        self._registry = registry
+
+    def render(self) -> str:
+        return "Commands: " + ", ".join(self._registry.names)
+
+
+class HelpDecorator:
+    """Base decorator that forwards rendering to the wrapped help component."""
+
+    def __init__(self, component: HelpComponent) -> None:
+        self._component = component
+
+    def render(self) -> str:
+        return self._component.render()
+
+
+class OperationHelpDecorator(HelpDecorator):
+    """Extend help with operations from the shared operation registry."""
+
+    def render(self) -> str:
+        return (
+            super().render()
+            + "\nOperations: "
+            + ", ".join(
+                f"{name} ({_display_symbol(name)})" for name in OPERATION_ALIASES
+            )
+        )
+
+
+class AliasHelpDecorator(HelpDecorator):
+    """Extend help with the word aliases of every registered operation."""
+
+    def render(self) -> str:
+        return (
+            super().render()
+            + "\nAliases: "
+            + ", ".join(
+                alias
+                for aliases in OPERATION_ALIASES.values()
+                for alias in aliases[1:-1]
+            )
+        )
+
+
+HELP_MENU: HelpComponent = AliasHelpDecorator(
+    OperationHelpDecorator(CommandHelp(REPL_COMMANDS))
+)
+
+
 def _print_help() -> None:
-    """Display the commands and arithmetic operations available in the REPL."""
-    print("Commands: help, history, clear, undo, redo, save, load, exit")
-    print(
-        "Operations: "
-        + ", ".join(
-            f"{name} ({_display_symbol(name)})" for name in OPERATION_ALIASES
-        )
+    """Display the decorated help menu."""
+    print(HELP_MENU.render())
+
+
+@REPL_COMMANDS.register("help")
+def _help_command(_calculator: Calculator, _config: AppConfig) -> Command:
+    return HelpCommand(HELP_MENU.render)
+
+
+@REPL_COMMANDS.register("history")
+def _history_command(calculator: Calculator, config: AppConfig) -> Command:
+    return HistoryCommand(calculator, config.precision)
+
+
+@REPL_COMMANDS.register("clear")
+def _clear_command(calculator: Calculator, _config: AppConfig) -> Command:
+    return ClearHistoryCommand(calculator)
+
+
+@REPL_COMMANDS.register("undo")
+def _undo_command(calculator: Calculator, _config: AppConfig) -> Command:
+    return UndoCommand(calculator)
+
+
+@REPL_COMMANDS.register("redo")
+def _redo_command(calculator: Calculator, _config: AppConfig) -> Command:
+    return RedoCommand(calculator)
+
+
+@REPL_COMMANDS.register("save")
+def _save_command(calculator: Calculator, config: AppConfig) -> Command:
+    return SaveHistoryCommand(
+        calculator,
+        config.history_csv_path,
+        encoding=config.default_encoding,
     )
-    print(
-        "Aliases: "
-        + ", ".join(
-            alias
-            for aliases in OPERATION_ALIASES.values()
-            for alias in aliases[1:-1]
-        )
+
+
+@REPL_COMMANDS.register("load")
+def _load_command(calculator: Calculator, config: AppConfig) -> Command:
+    return LoadHistoryCommand(
+        calculator,
+        config.history_csv_path,
+        encoding=config.default_encoding,
+        max_history_size=config.max_history_size,
     )
 
 
-def _print_history(
-    history: tuple[Calculation, ...],
-    precision: int | None = None,
-) -> None:
-    """Display successful calculations recorded during this session."""
-    if not history:
-        print("No calculations in history.")
-        return
+@REPL_COMMANDS.register("exit", "quit", "q")
+def _exit_command(_calculator: Calculator, _config: AppConfig) -> Command:
+    return ExitCommand()
 
-    for index, calculation in enumerate(history, start=1):
-        result = calculation.calculate()
-        if precision is not None:
-            result = round(result, precision)
-        if calculation.operation == "root":
-            expression = (
-                f"{calculation.second_number}{_display_symbol('root')}"
-                f"({calculation.first_number})"
-            )
-        else:
-            expression = (
-                f"{calculation.first_number} {calculation.symbol} "
-                f"{calculation.second_number}"
-            )
-        print(f"{index}. {expression} = {result}")
+
+def _read_calculation(
+    calculator: Calculator,
+    config: AppConfig,
+    operation: str,
+) -> Command:
+    """Prompt for operands and build a calculation command."""
+    # LBYL: reject an unknown operation before requesting operands.
+    if operation not in VALID_OPERATIONS:
+        raise InvalidOperationError(build_invalid_operation_message())
+
+    is_root = VALID_OPERATIONS[operation] == "root"
+    first_prompt = (
+        "Enter the number to take a root of: " if is_root else "Enter the first number: "
+    )
+    second_prompt = "Enter the root degree: " if is_root else "Enter the second number: "
+    first_number = parse_number(
+        input(_colorize(first_prompt, Fore.CYAN)).strip(),
+        "first",
+        maximum=config.max_input_value,
+    )
+    second_number = parse_number(
+        input(_colorize(second_prompt, Fore.CYAN)).strip(),
+        "second",
+        maximum=config.max_input_value,
+    )
+    return CalculateCommand(calculator, first_number, operation, second_number)
 
 
 def run_interactive(
@@ -105,7 +235,7 @@ def run_interactive(
     try:
         config = config or AppConfig.from_environment()
     except ConfigurationError as exc:
-        print(f"Configuration error: {exc}")
+        print(_colorize(f"Configuration error: {exc}", Fore.RED))
         return
 
     try:
@@ -115,7 +245,7 @@ def run_interactive(
             encoding=config.default_encoding,
         )
     except OSError as exc:
-        print(f"Unable to configure calculator logging: {exc}")
+        print(_colorize(f"Unable to configure calculator logging: {exc}", Fore.RED))
         return
 
     logger = get_logger()
@@ -134,7 +264,7 @@ def run_interactive(
             )
         except (HistoryDataError, HistoryFileError, ValueError, OSError) as exc:
             logger.error("Unable to load calculator history: %s", exc)
-            print(f"Unable to load calculator history: {exc}")
+            print(_colorize(f"Unable to load calculator history: {exc}", Fore.RED))
             return
 
         observers = [LoggingObserver()]
@@ -151,124 +281,71 @@ def run_interactive(
             max_history_size=config.max_history_size,
             precision=config.precision,
         )
-    print("-------------------- Enhanced Calculator --------------------")
-    print("Available operations: " + ", ".join(OPERATION_ALIASES))
+    print(_colorize("-------------------- Enhanced Calculator --------------------", Fore.CYAN))
+    print(_colorize("Available operations: " + ", ".join(OPERATION_ALIASES), Fore.CYAN))
     print("----------------------------------------------------------------")
 
     for operation_name, aliases in OPERATION_ALIASES.items():
         symbol = _display_symbol(operation_name)
         print(
-            OPERATION_COLORS[operation_name]
+            OPERATION_COLORS.get(operation_name, Fore.WHITE)
             + f"For {operation_name}, enter: {', '.join(aliases[:-1])}, or {symbol}"
         )
 
     print("----------------------------------------------------------------")
     print(
-        "Type 'help' for commands, 'history' to view results, 'clear' to clear "
-        "history, 'undo' or 'redo' to change history, 'save' or 'load' for CSV "
-        "history, or 'exit' to quit."
+        _colorize(
+            "Type 'help' for commands, 'history' to view results, 'clear' to clear "
+            "history, 'undo' or 'redo' to change history, 'save' or 'load' for CSV "
+            "history, or 'exit' to quit.",
+            Fore.CYAN,
+        )
     )
-    history_path = config.history_csv_path
+    invoker = CommandInvoker()
 
     while True:
         try:
-            operation = input("Choose an operation: ").strip()
-            command = operation.lower()
+            user_input = input(_colorize("Choose an operation: ", Fore.CYAN))
+            command_name = REPL_COMMANDS.resolve(user_input)
 
-            if command in {"quit", "exit", "q"}:
+            if command_name is None:
+                command = _read_calculation(
+                    calculator, config, user_input.strip().lower()
+                )
+            else:
+                command = REPL_COMMANDS.create(command_name, calculator, config)
+
+            result = invoker.execute(command)
+            print(_colorize(result, _result_color(command_name or "calculate", result)))
+
+            if getattr(command, "ends_session", False):
                 logger.info("Calculator session ended")
-                print("Goodbye!")
                 break
-            if command == "help":
-                _print_help()
-                continue
-            if command == "history":
-                _print_history(calculator.history, config.precision)
-                continue
-            if command == "clear":
-                calculator.clear_history()
-                print("Calculation history cleared.")
-                continue
-            if command == "undo":
-                print(
-                    "Undid the last calculation."
-                    if calculator.undo()
-                    else "Nothing to undo."
-                )
-                continue
-            if command == "redo":
-                print(
-                    "Redid the last calculation."
-                    if calculator.redo()
-                    else "Nothing to redo."
-                )
-                continue
-            if command == "save":
-                CalculationHistory(calculator.history).save_csv(
-                    history_path,
-                    encoding=config.default_encoding,
-                )
-                print(f"History saved to {history_path}.")
-                continue
-            if command == "load":
-                loaded_history = CalculationHistory.from_csv(
-                    history_path,
-                    encoding=config.default_encoding,
-                    max_size=config.max_history_size,
-                )
-                calculator.load_history(loaded_history.get_all())
-                print(f"History loaded from {history_path}.")
-                continue
-
-            # LBYL: reject an unknown operation before requesting operands.
-            if command not in VALID_OPERATIONS:
-                raise InvalidOperationError(INVALID_OPERATION_MESSAGE)
-
-            first_number = parse_number(
-                input(
-                    "Enter the number to take a root of: "
-                    if command in {"root", "nthroot", "√"}
-                    else "Enter the first number: "
-                ).strip(),
-                "first",
-                maximum=config.max_input_value,
-            )
-            second_number = parse_number(
-                input(
-                    "Enter the root degree: "
-                    if command in {"root", "nthroot", "√"}
-                    else "Enter the second number: "
-                ).strip(),
-                "second",
-                maximum=config.max_input_value,
-            )
-            result = calculator.calculate(first_number, command, second_number)
-            print(f"Result: {result}")
         except (EOFError, KeyboardInterrupt):
             logger.info("Calculator session interrupted")
-            print("\nGoodbye!")
+            print(_colorize("\nGoodbye!", Fore.GREEN))
             break
         except HistoryDataError as exc:
             logger.error("History data error: %s", exc)
-            print(f"History data error: {exc}")
+            print(_colorize(f"History data error: {exc}", Fore.RED))
         except HistoryFileError as exc:
             logger.error("History file error: %s", exc)
-            print(f"History file error: {exc}")
+            print(_colorize(f"History file error: {exc}", Fore.RED))
         except ValidationError as exc:
             logger.warning("Input validation failed: %s", exc)
-            print(f"Error: {exc}")
+            print(_colorize(f"Error: {exc}", Fore.RED))
         except OperationError as exc:
             logger.warning("Operation failed: %s", exc)
-            print(f"Error: {exc}")
+            print(_colorize(f"Error: {exc}", Fore.RED))
         except ValueError as exc:
             logger.error("Calculation or command failed: %s", exc)
-            print(f"Error: {exc}")
+            print(_colorize(f"Error: {exc}", Fore.RED))
         except ZeroDivisionError as exc:
             logger.warning("Calculation failed: %s", exc)
-            print(f"Error: {exc}")
+            print(_colorize(f"Error: {exc}", Fore.RED))
         except OSError as exc:
             logger.error("History file operation failed: %s", exc)
-            print(f"History file error: {exc}")
+            print(_colorize(f"History file error: {exc}", Fore.RED))
 
 
 if __name__ == "__main__":

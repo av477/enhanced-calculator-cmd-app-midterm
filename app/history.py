@@ -1,6 +1,7 @@
 """DataFrame-backed calculation history with CSV and memento support."""
 
 import math
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
@@ -14,7 +15,14 @@ from app.exceptions import HistoryDataError, HistoryFileError
 class CalculationHistory:
     """Store calculation records in a DataFrame and support state restoration."""
 
-    COLUMNS = ("first_number", "operation", "second_number")
+    COLUMNS = (
+        "operation",
+        "first_number",
+        "second_number",
+        "result",
+        "timestamp",
+    )
+    REQUIRED_COLUMNS = ("first_number", "operation", "second_number")
 
     def __init__(
         self,
@@ -37,9 +45,14 @@ class CalculationHistory:
         """Reconstruct an immutable view of the stored calculations."""
         return tuple(
             Calculation(
-                float(first_number), str(operation), float(second_number)
+                float(first_number),
+                str(operation),
+                float(second_number),
+                datetime.fromisoformat(str(timestamp)),
             )
-            for first_number, operation, second_number in self._dataframe.itertuples(
+            for first_number, operation, second_number, timestamp in self._dataframe[
+                ["first_number", "operation", "second_number", "timestamp"]
+            ].itertuples(
                 index=False, name=None
             )
         )
@@ -87,36 +100,78 @@ class CalculationHistory:
                 f"Unable to decode calculator history at {path} "
                 f"using {encoding}: {exc}"
             ) from exc
-        missing_columns = set(cls.COLUMNS).difference(dataframe.columns)
+        missing_columns = set(cls.REQUIRED_COLUMNS).difference(dataframe.columns)
         if missing_columns:
             missing = ", ".join(sorted(missing_columns))
             raise HistoryDataError(
                 f"History CSV is missing required columns: {missing}"
             )
-        if dataframe[list(cls.COLUMNS)].eq("").any().any():
+        required_values = dataframe[list(cls.REQUIRED_COLUMNS)]
+        if required_values.eq("").any().any():
             raise HistoryDataError("History CSV contains empty calculation values.")
 
+        has_result = "result" in dataframe.columns
+        has_timestamp = "timestamp" in dataframe.columns
+        if has_timestamp and dataframe["timestamp"].eq("").any():
+            raise HistoryDataError("History CSV contains empty timestamps.")
+
         history = cls(max_size=max_size)
-        for first_number, operation, second_number in dataframe[
-            list(cls.COLUMNS)
-        ].itertuples(index=False, name=None):
+        for row in dataframe.to_dict(orient="records"):
             try:
-                first_number = float(first_number)
-                second_number = float(second_number)
+                first_number = float(row["first_number"])
+                second_number = float(row["second_number"])
             except (TypeError, ValueError) as exc:
                 raise HistoryDataError(
                     "History CSV contains non-numeric calculation values."
                 ) from exc
             if not math.isfinite(first_number) or not math.isfinite(second_number):
                 raise HistoryDataError("History CSV contains non-finite numbers.")
+
+            if has_result:
+                try:
+                    result = float(row["result"])
+                except (TypeError, ValueError) as exc:
+                    raise HistoryDataError(
+                        "History CSV contains a non-numeric result."
+                    ) from exc
+                if not math.isfinite(result):
+                    raise HistoryDataError(
+                        "History CSV contains a non-finite result."
+                    )
+
+            timestamp = None
+            if has_timestamp:
+                try:
+                    timestamp = datetime.fromisoformat(str(row["timestamp"]))
+                except (TypeError, ValueError) as exc:
+                    raise HistoryDataError(
+                        "History CSV contains an invalid timestamp."
+                    ) from exc
             try:
                 calculation = CalculationFactory.create_calculation(
-                    first_number, str(operation), second_number
+                    first_number, str(row["operation"]), second_number
                 )
             except ValueError as exc:
                 raise HistoryDataError(
                     "History CSV contains an invalid operation."
                 ) from exc
+            try:
+                calculated_result = calculation.calculate()
+            except (ArithmeticError, ValueError) as exc:
+                raise HistoryDataError(
+                    "History CSV contains a calculation that cannot be evaluated."
+                ) from exc
+            if has_result and not math.isclose(result, calculated_result):
+                raise HistoryDataError(
+                    "History CSV contains a result that does not match its operands."
+                )
+            if timestamp is not None:
+                calculation = Calculation(
+                    calculation.first_number,
+                    calculation.operation,
+                    calculation.second_number,
+                    timestamp,
+                )
             history.add(calculation)
         return history
 
@@ -155,6 +210,8 @@ class CalculationHistory:
                 "first_number": calculation.first_number,
                 "operation": calculation.operation,
                 "second_number": calculation.second_number,
+                "result": calculation.calculate(),
+                "timestamp": calculation.timestamp.isoformat(),
             }
             for calculation in calculations
         ]

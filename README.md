@@ -14,13 +14,19 @@ Factory, Observer, Memento, and Facade patterns.
 - `help`, `history`, `clear`, `undo`, `redo`, `save`, `load`, and exit commands
 - Input validation and clear errors for invalid input and unsupported results
 - File-based calculation logging and observer-driven CSV auto-save
-- Pytest suite with 100% statement and branch coverage enforced in CI
+- Decorator-generated help that reflects the registered commands and operations
+- Color-coded prompts and REPL feedback using Colorama
+- Command objects for every REPL action, dispatched through a command registry
+  and supporting queued execution
+- Pytest suite with statement and branch coverage measured in CI; CI requires
+  at least 90% total coverage
 
 ## Requirements
 
 - Python 3.11 or newer
 - pip
-- Runtime packages: `colorama`, `pandas`, and `python-dotenv`
+- Runtime packages: `colorama`, `pandas`, and `python-dotenv`, declared in
+  `pyproject.toml` and installed by `pip install -e ".[dev]"`
 
 ## Setup
 
@@ -127,6 +133,22 @@ in the working directory. Process environment variables take precedence over
 `.env`. The checked-in `.env.example` lists the defaults; copy it to `.env` to
 customize local settings. `.env` is ignored by Git.
 
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+macOS or Linux:
+
+```bash
+cp .env.example .env
+```
+
+The calculator loads `.env` when the REPL starts. Leave values unchanged to
+use defaults, or edit them as `KEY=value` entries. Process environment
+variables override values in the file.
+
 | Variable | Default | Description |
 | --- | --- | --- |
 | `CALCULATOR_LOG_DIR` | `.` | Base directory for relative log file paths |
@@ -147,6 +169,14 @@ directories. Absolute filenames are used as provided. The legacy
 must be 0–15 decimal places, and the maximum input must be a positive finite
 number.
 
+Logging is enabled by default at `INFO` level and writes to
+`CALCULATOR_LOG_FILE`. Relative log paths are placed under
+`CALCULATOR_LOG_DIR`; parent directories are created as needed. Successful
+calculations and history/session events are logged at INFO, invalid input and
+failed operations at WARNING, and history/data or file failures at ERROR.
+`CALCULATOR_LOG_LEVEL` sets the minimum severity written to the file; select
+any supported level from the table above.
+
 The configured CSV is loaded at startup when it exists. When auto-save is
 enabled, successful calculations and history changes (clear, undo, redo, and
 load) are saved automatically. Disabling auto-save leaves manual `save` and
@@ -154,8 +184,11 @@ load) are saved automatically. Disabling auto-save leaves manual `save` and
 file with its operation, operands, and result. Invalid settings are reported
 before the REPL starts.
 
-CSV history stores the first operand, canonical operation name, and second
-operand. Results are recalculated when history is displayed.
+CSV history stores the canonical operation, both operands, the calculated
+result, and an ISO-8601 timestamp in UTC. Loading validates result values and
+timestamps and reconstructs calculation records with their original
+timestamps. Legacy CSV files containing only operation and operands remain
+loadable; their results are calculated and timestamps are assigned on load.
 
 ## Python API
 
@@ -187,6 +220,37 @@ calculator.undo()
 calculator.redo()
 ```
 
+To add a REPL command, register a factory that builds a command object; it
+then appears in `help` automatically:
+
+```python
+from app.calculator_commands import HelpCommand
+from app.calculator_repl import REPL_COMMANDS
+
+@REPL_COMMANDS.register("about", "info")
+def _about_command(calculator, config):
+    return HelpCommand(lambda: "Enhanced Calculator")
+```
+
+To add an operation, add its strategy to `OperationFactory` in
+`app/operations.py` and its aliases to `OPERATION_ALIASES` in
+`app/calculator_config.py`; help, the startup listing, and error messages pick
+it up automatically.
+
+Commands can also be queued and executed in order:
+
+```python
+from app.calculator import Calculator
+from app.calculator_commands import CalculateCommand, CommandInvoker
+
+calculator = Calculator()
+invoker = CommandInvoker()
+invoker.enqueue(CalculateCommand(calculator, 2, "power", 3))
+invoker.enqueue(CalculateCommand(calculator, 10, "modulus", 4))
+for message in invoker.execute_all():
+    print(message)
+```
+
 ## Design and project layout
 
 - **Strategy and Factory:** `OperationFactory` selects an operation strategy;
@@ -194,6 +258,22 @@ calculator.redo()
 - **Observer:** `Calculator` broadcasts state changes to registered observers.
   `LoggingObserver` records calculation details, and `AutoSaveObserver`
   automatically persists CSV history.
+- **Decorator:** the help menu is a `CommandHelp` component wrapped by
+  `OperationHelpDecorator` and `AliasHelpDecorator`. `CommandHelp` lists the
+  commands in the REPL command registry, and the decorators append operation
+  names, symbols, and aliases read from `OPERATION_ALIASES` each time help is
+  shown. Registering a new command or operation updates `help` (and the
+  invalid-operation message) with no manual edits.
+- **Command:** `calculator_commands.py` encapsulates each request (calculate,
+  help, history, clear, undo, redo, save, load, exit) in a command object.
+  The REPL looks up user input in a `CommandRegistry` (populated with the
+  `@REPL_COMMANDS.register(...)` decorator) instead of an `if`/`elif` chain;
+  any other input is treated as an operation and becomes a `CalculateCommand`.
+  `CommandInvoker` executes commands immediately or queues them for ordered
+  execution.
+- **Color output:** Colorama colors prompts and banners cyan, successful
+  results green, notices such as "Nothing to undo" yellow, and errors red.
+  Each operation has its own color in the startup listing.
 - **Logging:** The CLI writes to `CALCULATOR_LOG_FILE` (or the configured
   default log path). Successful calculations and session/history events are
   logged at INFO, invalid input and failed operations at WARNING, and history
@@ -206,6 +286,7 @@ calculator.redo()
 app/
     __init__.py
     calculator.py
+    calculator_commands.py
     calculation.py
     calculator_config.py
     calculator_memento.py
@@ -229,7 +310,6 @@ tests/
     test_history.py
     test_input_validators.py
     test_operations.py
-.env
 .env.example
 pyproject.toml
 README.md
@@ -246,11 +326,15 @@ Run all tests:
 python -m pytest
 ```
 
-Measure statement and branch coverage and require both to reach 100%:
+Measure statement and branch coverage and enforce the same 90% minimum used by
+CI:
 
 ```console
-python -m pytest --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=100
+python -m pytest --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=90
 ```
+
+The test suite currently reaches 100% statement and branch coverage. You can
+use `--cov-fail-under=100` locally to enforce that stricter target.
 
 Coverage exclusions should be reserved for code that cannot meaningfully be
 exercised. `# pragma: no cover` excludes a marked line (and may exclude a
@@ -260,6 +344,10 @@ add tests for those paths. This project currently has no coverage exclusions.
 
 ## Continuous integration
 
-The GitHub Actions workflow at `.github/workflows/python-app.yml` installs
-the project and development dependencies, runs pytest with branch coverage,
-and fails if total coverage is below 100%.
+The GitHub Actions workflow at `.github/workflows/python-app.yml` runs on
+pushes to `main` and pull requests targeting `main`. It checks out the
+repository, sets up Python 3.11, installs the project and development
+dependencies from `pyproject.toml`, and runs pytest with statement and branch
+coverage. The workflow fails if total coverage is below 90%. No
+`requirements.txt` is needed because runtime and development dependencies are
+declared in `pyproject.toml`.

@@ -81,10 +81,22 @@ def test_divide_by_zero(a, b):
 
 @pytest.mark.parametrize(
     ("base", "exponent", "expected"),
-    [(2, 3, 8), (5, 0, 1), (-2, 3, -8), (9, 0.5, 3)],
+    [
+        (2, 3, 8),
+        (5, 0, 1),
+        (-2, 3, -8),
+        (9, 0.5, 3),
+        (2, -3, 0.125),
+        (-2, -3, -0.125),
+    ],
 )
 def test_power(base, exponent, expected):
     assert power(base, exponent) == expected
+
+
+def test_power_rejects_zero_to_a_negative_exponent():
+    with pytest.raises(ZeroDivisionError):
+        power(0, -1)
 
 
 def test_power_rejects_non_real_results_and_overflow():
